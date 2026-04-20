@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
-const { createUser } = require("../models/user-model");
-const { createTeam, getAllTeams, getTeamById, getTeamByName, updateTeam } = require("../models/team-model");
+const { addUserToTeams, createUser } = require("../models/user-model");
+const { createTeam, getAllTeams, getTeamById, getTeamByName, getTeamsByIds, updateTeam } = require("../models/team-model");
+const { getAccessibleTeamIdsForUser } = require("../models/user-team-model");
 const { HttpError } = require("../utils/http-error");
 
 function normalizeRuleConfig(payload) {
@@ -50,8 +51,12 @@ function normalizeTeamPayload(payload, existingTeamId = null) {
   };
 }
 
-function listTeams() {
-  return getAllTeams();
+function listTeams(user) {
+  if (!user || user.role === "admin") {
+    return getAllTeams();
+  }
+  const teamIds = getAccessibleTeamIdsForUser(user);
+  return getTeamsByIds(teamIds);
 }
 
 function createTeamWithOptionalUser(payload) {
@@ -59,12 +64,13 @@ function createTeamWithOptionalUser(payload) {
   const team = createTeam(teamPayload);
 
   if (payload.user && payload.user.username && payload.user.password) {
-    createUser({
+    const createdUser = createUser({
       username: payload.user.username,
       password: bcrypt.hashSync(payload.user.password, 10),
       role: "team_user",
       team_id: team.id
     });
+    addUserToTeams(createdUser.id, [team.id]);
   }
 
   return team;

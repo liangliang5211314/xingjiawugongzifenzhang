@@ -10,20 +10,52 @@ CREATE TABLE IF NOT EXISTS teams (
 CREATE TABLE IF NOT EXISTS members (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
-  team_id INTEGER NOT NULL,
+  team_id INTEGER,
   is_leader INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id INTEGER NOT NULL,
+  member_id INTEGER NOT NULL,
+  is_leader INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (team_id, member_id),
+  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+  FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'team_user')),
+  role TEXT NOT NULL CHECK (role IN ('admin', 'team_user', 'user')),
   team_id INTEGER,
+  uid TEXT UNIQUE,
+  phone TEXT DEFAULT '',
+  nickname TEXT,
+  bio TEXT DEFAULT '',
+  region TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'normal',
+  avatar_url TEXT,
+  wx_openid TEXT UNIQUE,
+  wechat_openid TEXT UNIQUE,
+  wechat_unionid TEXT,
+  last_login TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_teams (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  team_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, team_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS records (

@@ -2,7 +2,7 @@ const { createTeamWithOptionalUser, listTeams, updateExistingTeam } = require(".
 
 function listTeamsController(req, res, next) {
   try {
-    res.json(listTeams());
+    res.json(listTeams(req.user));
   } catch (error) {
     next(error);
   }

@@ -1,5 +1,5 @@
 const { getTeamById } = require("../models/team-model");
-const { createMember, getMemberById, getMembersByTeamId } = require("../models/member-model");
+const { addMemberToTeam, createMember, getMemberById, getMembersByTeamId } = require("../models/member-model");
 const { HttpError } = require("../utils/http-error");
 
 function listMembers(teamId) {
@@ -10,11 +10,36 @@ function listMembers(teamId) {
 }
 
 function addMember(payload) {
-  const team = getTeamById(payload.team_id);
+  const teamIds = Array.isArray(payload.team_ids) && payload.team_ids.length > 0
+    ? payload.team_ids.map(Number)
+    : [Number(payload.team_id)];
+
+  teamIds.forEach((teamId) => {
+    const team = getTeamById(teamId);
+    if (!team) {
+      throw new HttpError(404, `Team ${teamId} not found`);
+    }
+  });
+
+  const member = createMember({ name: payload.name });
+  teamIds.forEach((teamId) => {
+    addMemberToTeam({
+      member_id: member.id,
+      team_id: teamId,
+      is_leader: Number(teamId) === Number(teamIds[0]) ? !!payload.is_leader : false
+    });
+  });
+  return member;
+}
+
+function addExistingMemberToTeam(memberId, teamId, isLeader = false) {
+  const team = getTeamById(teamId);
   if (!team) {
     throw new HttpError(404, "Team not found");
   }
-  return createMember(payload);
+  const member = requireMember(memberId);
+  addMemberToTeam({ member_id: member.id, team_id: teamId, is_leader: isLeader });
+  return member;
 }
 
 function requireMember(id) {
@@ -28,5 +53,6 @@ function requireMember(id) {
 module.exports = {
   listMembers,
   addMember,
+  addExistingMemberToTeam,
   requireMember
 };

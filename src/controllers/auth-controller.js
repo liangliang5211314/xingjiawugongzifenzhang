@@ -1,4 +1,4 @@
-const { getProfile, login } = require("../services/auth-service");
+const { getProfile, login, loginWithWechat } = require("../services/auth-service");
 
 function loginController(req, res, next) {
   try {
@@ -17,4 +17,16 @@ function meController(req, res, next) {
   }
 }
 
-module.exports = { loginController, meController };
+async function wechatOauthController(req, res, next) {
+  try {
+    res.json(await loginWithWechat(req.body.code));
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = {
+  loginController,
+  meController,
+  wechatOauthController
+};

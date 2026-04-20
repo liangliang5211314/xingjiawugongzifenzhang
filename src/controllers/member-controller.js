@@ -1,4 +1,4 @@
-const { addMember, listMembers } = require("../services/member-service");
+const { addExistingMemberToTeam, addMember, listMembers } = require("../services/member-service");
 
 function listMembersController(req, res, next) {
   try {
@@ -16,7 +16,22 @@ function createMemberController(req, res, next) {
   }
 }
 
+function linkMemberToTeamController(req, res, next) {
+  try {
+    res.json(
+      addExistingMemberToTeam(
+        Number(req.body.member_id),
+        Number(req.body.team_id),
+        !!req.body.is_leader
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   listMembersController,
-  createMemberController
+  createMemberController,
+  linkMemberToTeamController
 };

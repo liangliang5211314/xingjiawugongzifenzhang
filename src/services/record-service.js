@@ -1,5 +1,6 @@
 const { getTeamById } = require("../models/team-model");
 const { createRecord, getRecordsByTeamAndMonth, getMonthStats, getYearStats } = require("../models/record-model");
+const { memberBelongsToTeam } = require("../models/member-model");
 const { requireMember } = require("./member-service");
 const { HttpError } = require("../utils/http-error");
 const { toCents, fromCents } = require("../utils/money");
@@ -11,7 +12,7 @@ function addRecord(payload) {
   }
 
   const member = requireMember(payload.member_id);
-  if (Number(member.team_id) !== Number(payload.team_id)) {
+  if (!memberBelongsToTeam(member.id, Number(payload.team_id))) {
     throw new HttpError(400, "Member does not belong to the given team");
   }
 

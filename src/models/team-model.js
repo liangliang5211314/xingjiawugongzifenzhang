@@ -14,6 +14,14 @@ function getAllTeams() {
   return db.prepare("SELECT * FROM teams ORDER BY id ASC").all().map(mapTeam);
 }
 
+function getTeamsByIds(ids) {
+  if (!ids || ids.length === 0) {
+    return [];
+  }
+  const placeholders = ids.map(() => "?").join(", ");
+  return db.prepare(`SELECT * FROM teams WHERE id IN (${placeholders}) ORDER BY id ASC`).all(...ids).map(mapTeam);
+}
+
 function getTeamById(id) {
   return mapTeam(db.prepare("SELECT * FROM teams WHERE id = ?").get(id));
 }
@@ -44,6 +52,7 @@ module.exports = {
   getAllTeams,
   getTeamById,
   getTeamByName,
+  getTeamsByIds,
   createTeam,
   updateTeam
 };

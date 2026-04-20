@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { env } = require("../config/env");
+const { getAccessibleTeamIdsForUser } = require("../models/user-team-model");
 const { HttpError } = require("../utils/http-error");
 
 function authenticate(req, res, next) {
@@ -42,7 +43,8 @@ function ensureTeamAccess(req, res, next) {
       req.body.teamId
   );
 
-  if (!teamId || teamId !== Number(req.user.team_id)) {
+  const accessibleTeamIds = getAccessibleTeamIdsForUser(req.user) || [];
+  if (!teamId || !accessibleTeamIds.includes(Number(teamId))) {
     return next(new HttpError(403, "You can only access your own team"));
   }
 
