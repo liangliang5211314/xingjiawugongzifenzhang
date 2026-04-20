@@ -81,6 +81,7 @@ docker compose up --build
 - PM2 配置: [ecosystem.config.js](/E:/bianchengxuexi/xingjiawugongzi/ecosystem.config.js)
 - Nginx 示例: [deploy/nginx.conf](/E:/bianchengxuexi/xingjiawugongzi/deploy/nginx.conf)
 - 部署文档: [DEPLOY.md](/E:/bianchengxuexi/xingjiawugongzi/DEPLOY.md)
+- 一键部署: [DEPLOY_ONE_CLICK.md](/E:/bianchengxuexi/xingjiawugongzi/DEPLOY_ONE_CLICK.md)
 
 启动后访问：
 
