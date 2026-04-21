@@ -44,34 +44,35 @@
 
   <script src="/member.js"></script>
   <script>
-    let token = '';
-    let currentUser = null;
-    let currentMonth = new Date().toISOString().slice(0,7);
+    var token = '';
+    var currentUser = null;
+    var currentMonth = new Date().toISOString().slice(0,7);
 
-    // 从URL hash或sessionStorage获取token
     function getToken() {
-      const hash = location.hash.replace('#','');
-      const params = new URLSearchParams(hash);
-      const t = params.get('token') || sessionStorage.getItem('member_token');
+      var hash = location.hash.replace('#','');
+      var params = new URLSearchParams(hash);
+      var t = params.get('token') || sessionStorage.getItem('member_token');
       if (t) { sessionStorage.setItem('member_token', t); location.hash = ''; }
       return t;
     }
 
     async function memberApi(url) {
-      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+      var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
       if (res.status === 401) { location.href = '/auth/wechat/start'; return null; }
       return res.json();
     }
 
     function prevMonth() {
-      const [y,m] = currentMonth.split('-').map(Number);
+      var parts = currentMonth.split('-').map(Number);
+      var y = parts[0], m = parts[1];
       currentMonth = m === 1 ? (y-1)+'-12' : y+'-'+(m-1).toString().padStart(2,'0');
       loadIncome();
     }
     function nextMonth() {
-      const [y,m] = currentMonth.split('-').map(Number);
-      const today = new Date().toISOString().slice(0,7);
-      const next = m === 12 ? (y+1)+'-01' : y+'-'+(m+1).toString().padStart(2,'0');
+      var parts = currentMonth.split('-').map(Number);
+      var y = parts[0], m = parts[1];
+      var today = new Date().toISOString().slice(0,7);
+      var next = m === 12 ? (y+1)+'-01' : y+'-'+(m+1).toString().padStart(2,'0');
       if (next > today) return;
       currentMonth = next;
       loadIncome();
@@ -80,51 +81,59 @@
     async function init() {
       token = getToken();
       if (!token) { location.href = '/auth/wechat/start'; return; }
-      const me = await memberApi('/member/me');
-      if (!me?.ok) return;
+      var me = await memberApi('/member/me');
+      if (!me || !me.ok) return;
       currentUser = me.data.user;
       document.getElementById('userName').textContent = currentUser.name || '未设置姓名';
-      document.getElementById('teamName').textContent = me.data.team?.name || '未绑定团队';
+      document.getElementById('teamName').textContent = me.data.team ? me.data.team.name : '未绑定团队';
       loadIncome();
     }
 
     async function loadIncome() {
       document.getElementById('monthLabel').textContent = currentMonth;
-      const res = await memberApi('/member/income/current?month=' + currentMonth);
-      if (!res?.ok) return;
-      const d = res.data;
+      var res = await memberApi('/member/income/current?month=' + currentMonth);
+      if (!res || !res.ok) return;
+      var d = res.data;
       if (!d) {
         document.getElementById('incomeCards').innerHTML = '<div class="m-empty">未绑定团队或无数据</div>';
+        document.getElementById('recordList').innerHTML = '<div class="m-empty">暂无明细</div>';
         return;
       }
 
       // 结算卡片
-      const s = d.settlement;
-      document.getElementById('incomeCards').innerHTML = s ? [
-        { label:'应收金额', value:'¥'+s.should_get, cls:'highlight' },
-        { label:'差额',     value:'¥'+s.diff, cls: parseFloat(s.diff)>=0?'green':'red' },
-      ].map(c=>\`<div class="m-stat-card \${c.cls}"><div class="m-stat-label">\${c.label}</div><div class="m-stat-value">\${c.value}</div></div>\`).join('')
-      : '<div class="m-empty">本月暂未结算</div>';
+      var s = d.settlement;
+      if (s) {
+        var diffCls = parseFloat(s.diff) >= 0 ? 'green' : 'red';
+        document.getElementById('incomeCards').innerHTML =
+          '<div class="m-stat-card highlight"><div class="m-stat-label">应收金额</div><div class="m-stat-value">¥' + s.should_get + '</div></div>' +
+          '<div class="m-stat-card ' + diffCls + '"><div class="m-stat-label">差额</div><div class="m-stat-value">¥' + s.diff + '</div></div>';
+      } else {
+        document.getElementById('incomeCards').innerHTML = '<div class="m-empty">本月暂未结算</div>';
+      }
 
       // 年同比
-      const cmp = d.year_compare;
-      if (cmp.last != null || cmp.prev2 != null) {
+      var cmp = d.year_compare;
+      if (cmp && (cmp.last != null || cmp.prev2 != null)) {
         document.getElementById('compareSection').style.display = 'block';
-        document.getElementById('compareContent').innerHTML = [
-          cmp.last  != null ? \`<div class="m-compare-item"><span>去年同月</span><strong>¥\${cmp.last}</strong></div>\` : '',
-          cmp.prev2 != null ? \`<div class="m-compare-item"><span>前年同月</span><strong>¥\${cmp.prev2}</strong></div>\` : '',
-        ].join('');
+        var cmpHtml = '';
+        if (cmp.last  != null) cmpHtml += '<div class="m-compare-item"><span>去年同月</span><strong>¥' + cmp.last  + '</strong></div>';
+        if (cmp.prev2 != null) cmpHtml += '<div class="m-compare-item"><span>前年同月</span><strong>¥' + cmp.prev2 + '</strong></div>';
+        document.getElementById('compareContent').innerHTML = cmpHtml;
       }
 
       // 明细
-      document.getElementById('recordList').innerHTML = d.records.length
-        ? d.records.map(r => \`
-            <div class="m-record-item">
-              <span class="m-record-type type-\${r.item_type}">\${{income:'收入',tax:'退税',expense:'支出',adjust:'调整'}[r.item_type]||r.item_type}</span>
-              <span class="m-record-name">\${r.item_name||r.item_type}</span>
-              <span class="m-record-amount \${r.item_type==='expense'?'red':''}">¥\${r.amount}</span>
-            </div>\`).join('')
-        : '<div class="m-empty">本月暂无明细</div>';
+      var TYPES = { income:'收入', tax:'退税', expense:'支出', adjust:'调整' };
+      if (d.records && d.records.length) {
+        document.getElementById('recordList').innerHTML = d.records.map(function(r) {
+          return '<div class="m-record-item">' +
+            '<span class="m-record-type type-' + r.item_type + '">' + (TYPES[r.item_type] || r.item_type) + '</span>' +
+            '<span class="m-record-name">' + (r.item_name || r.item_type) + '</span>' +
+            '<span class="m-record-amount ' + (r.item_type==='expense'?'red':'') + '">¥' + r.amount + '</span>' +
+            '</div>';
+        }).join('');
+      } else {
+        document.getElementById('recordList').innerHTML = '<div class="m-empty">本月暂无明细</div>';
+      }
     }
 
     init();
