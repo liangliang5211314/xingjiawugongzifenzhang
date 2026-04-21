@@ -12,13 +12,39 @@ function findByOpenid(openid) {
   return db.prepare('SELECT * FROM users WHERE openid = ?').get(openid);
 }
 
+function getUserTeamIds(userId) {
+  return db.prepare('SELECT team_id FROM user_teams WHERE user_id = ?').all(userId).map(r => r.team_id);
+}
+
+function setUserTeams(userId, teamIds) {
+  db.transaction(() => {
+    db.prepare('DELETE FROM user_teams WHERE user_id = ?').run(userId);
+    const ins = db.prepare('INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)');
+    for (const tid of teamIds) ins.run(userId, tid);
+    db.prepare('UPDATE users SET team_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(teamIds[0] || null, userId);
+  })();
+}
+
 function listUsers({ teamId, role } = {}) {
-  let sql = 'SELECT id,name,mobile,username,role,openid,team_id,status,jingfen_mobile,jingfen_password,jingfen_realname,created_at,updated_at FROM users WHERE 1=1';
+  let sql = `
+    SELECT u.id, u.name, u.mobile, u.username, u.role, u.openid, u.team_id, u.status,
+           u.jingfen_mobile, u.jingfen_password, u.jingfen_realname, u.created_at, u.updated_at,
+           (SELECT GROUP_CONCAT(ut.team_id) FROM user_teams ut WHERE ut.user_id = u.id) as team_ids_str
+    FROM users u WHERE 1=1
+  `;
   const params = [];
-  if (teamId) { sql += ' AND team_id = ?'; params.push(teamId); }
-  if (role)   { sql += ' AND role = ?';    params.push(role); }
-  sql += ' ORDER BY id ASC';
-  return db.prepare(sql).all(...params);
+  if (teamId) {
+    sql += ' AND EXISTS (SELECT 1 FROM user_teams ut WHERE ut.user_id = u.id AND ut.team_id = ?)';
+    params.push(teamId);
+  }
+  if (role) { sql += ' AND u.role = ?'; params.push(role); }
+  sql += ' ORDER BY u.id ASC';
+  return db.prepare(sql).all(...params).map(u => {
+    u.team_ids = u.team_ids_str ? u.team_ids_str.split(',').map(Number) : (u.team_id ? [u.team_id] : []);
+    delete u.team_ids_str;
+    return u;
+  });
 }
 
 function createUser({ name, mobile, username, password_hash, role, openid, unionid, team_id }) {
@@ -46,12 +72,11 @@ function updateUser(id, fields) {
   return findById(id);
 }
 
-// 微信登录：找到或创建member用户
 function upsertWechatUser({ openid, unionid, name }) {
   let user = findByOpenid(openid);
   if (user) {
     const updates = { unionid: unionid || user.unionid };
-    if (!user.name) updates.name = name; // 只在用户未手动设置姓名时才用微信昵称
+    if (!user.name) updates.name = name;
     updateUser(user.id, updates);
     return { user: findById(user.id), isNew: false };
   }
@@ -59,4 +84,4 @@ function upsertWechatUser({ openid, unionid, name }) {
   return { user, isNew: true };
 }
 
-module.exports = { findByUsername, findById, findByOpenid, listUsers, createUser, updateUser, upsertWechatUser };
+module.exports = { findByUsername, findById, findByOpenid, getUserTeamIds, setUserTeams, listUsers, createUser, updateUser, upsertWechatUser };

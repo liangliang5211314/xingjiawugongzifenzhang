@@ -20,8 +20,8 @@ const body = `
       <input type="text" id="uMobile" placeholder="13800000000">
     </div>
     <div class="form-row">
-      <label>所属团队</label>
-      <select id="uTeam"><option value="">-- 不绑定团队 --</option></select>
+      <label>所属团队 <small>（可多选）</small></label>
+      <div id="uTeamsBox" style="display:flex;flex-wrap:wrap;gap:12px;padding:6px 0;min-height:32px"></div>
     </div>
     <div class="form-row">
       <label>角色</label>
@@ -39,12 +39,12 @@ const body = `
       <input type="password" id="uPassword" placeholder="新密码">
     </div>
     <div class="form-row">
-      <label>京粉手机号</label>
-      <input type="text" id="uJfMobile" placeholder="京粉注册手机号">
-    </div>
-    <div class="form-row">
       <label>京粉实名人</label>
       <input type="text" id="uJfRealname" placeholder="京粉账号实名人姓名">
+    </div>
+    <div class="form-row">
+      <label>京粉手机号</label>
+      <input type="text" id="uJfMobile" placeholder="京粉注册手机号">
     </div>
     <div class="form-row">
       <label>京粉密码</label>
@@ -66,28 +66,44 @@ const body = `
 </div>
 `;
 const pageScript = `<script>
-let users = [], teamsMap = {};
+let users = [], teamsMap = {}, allTeams = [];
 
 async function loadAll() {
   const [ur, tr] = await Promise.all([api('/api/users'), api('/api/teams')]);
   if (!ur || !tr) return;
   users = ur.data || [];
-  teamsMap = Object.fromEntries((tr.data||[]).map(t => [t.id, t.name]));
-  const sel = document.getElementById('uTeam');
-  sel.innerHTML = '<option value="">-- 不绑定团队 --</option>' +
-    (tr.data||[]).map(t => '<option value="'+t.id+'">'+t.name+'</option>').join('');
-  document.getElementById('userListBody').innerHTML = users.map(u =>
-    '<tr>' +
-    '<td>'+u.id+'</td>' +
-    '<td><strong>'+(u.name||'-')+'</strong></td>' +
-    '<td>'+(u.mobile||'-')+'</td>' +
-    '<td><span class="badge">'+u.role+'</span></td>' +
-    '<td>'+(u.team_id ? teamsMap[u.team_id]||u.team_id : '-')+'</td>' +
-    '<td>'+(u.openid ? '✅已绑定' : '⬜未绑定')+'</td>' +
-    '<td>'+(u.status ? '正常' : '停用')+'</td>' +
-    '<td><button class="btn btn-sm" onclick="editUser('+u.id+')">编辑</button></td>' +
-    '</tr>'
-  ).join('') || '<tr><td colspan="8">暂无成员</td></tr>';
+  allTeams = tr.data || [];
+  teamsMap = Object.fromEntries(allTeams.map(t => [t.id, t.name]));
+  document.getElementById('userListBody').innerHTML = users.map(function(u) {
+    var teamNames = (u.team_ids && u.team_ids.length)
+      ? u.team_ids.map(function(id){ return teamsMap[id]||id; }).join(', ')
+      : '-';
+    return '<tr>' +
+      '<td>' + u.id + '</td>' +
+      '<td><strong>' + (u.name||'-') + '</strong></td>' +
+      '<td>' + (u.mobile||'-') + '</td>' +
+      '<td><span class="badge">' + u.role + '</span></td>' +
+      '<td>' + teamNames + '</td>' +
+      '<td>' + (u.openid ? '✅已绑定' : '⬜未绑定') + '</td>' +
+      '<td>' + (u.status ? '正常' : '停用') + '</td>' +
+      '<td><button class="btn btn-sm" onclick="editUser(' + u.id + ')">编辑</button></td>' +
+      '</tr>';
+  }).join('') || '<tr><td colspan="8">暂无成员</td></tr>';
+}
+
+function renderTeamCheckboxes(selectedIds) {
+  document.getElementById('uTeamsBox').innerHTML = allTeams.map(function(t) {
+    var checked = selectedIds && selectedIds.indexOf(t.id) !== -1 ? ' checked' : '';
+    return '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:4px 10px;border:1px solid #ddd;border-radius:6px;' +
+           (checked ? 'background:#f0f4ff;border-color:#6c63ff;' : '') + '">' +
+           '<input type="checkbox" value="' + t.id + '"' + checked + ' onchange="onTeamCheck(this)"> ' + t.name + '</label>';
+  }).join('');
+}
+
+function onTeamCheck(cb) {
+  var label = cb.parentNode;
+  if (cb.checked) { label.style.background='#f0f4ff'; label.style.borderColor='#6c63ff'; }
+  else { label.style.background=''; label.style.borderColor='#ddd'; }
 }
 
 function showUserForm(user) {
@@ -96,38 +112,40 @@ function showUserForm(user) {
   document.getElementById('userId').value = user ? user.id : '';
   document.getElementById('uName').value = user ? user.name||'' : '';
   document.getElementById('uMobile').value = user ? user.mobile||'' : '';
-  document.getElementById('uTeam').value = user ? user.team_id||'' : '';
   document.getElementById('uRole').value = user ? user.role : 'member';
   document.getElementById('uUsername').value = user ? user.username||'' : '';
   document.getElementById('uPassword').value = '';
-  document.getElementById('uJfMobile').value = user ? user.jingfen_mobile||'' : '';
   document.getElementById('uJfRealname').value = user ? user.jingfen_realname||'' : '';
+  document.getElementById('uJfMobile').value = user ? user.jingfen_mobile||'' : '';
   document.getElementById('uJfPwd').value = '';
   document.getElementById('userFormErr').style.display = 'none';
+  renderTeamCheckboxes(user ? user.team_ids || [] : []);
 }
 function hideUserForm() { document.getElementById('userFormWrap').style.display = 'none'; }
-function editUser(id) { showUserForm(users.find(u => u.id === id)); }
+function editUser(id) { showUserForm(users.find(function(u){ return u.id === id; })); }
 
 document.getElementById('userForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   const id = document.getElementById('userId').value;
+  var checked = document.querySelectorAll('#uTeamsBox input:checked');
   const body = {
-    name: document.getElementById('uName').value,
-    mobile: document.getElementById('uMobile').value,
-    team_id: document.getElementById('uTeam').value || null,
-    role: document.getElementById('uRole').value,
-    username: document.getElementById('uUsername').value || null,
+    name:             document.getElementById('uName').value,
+    mobile:           document.getElementById('uMobile').value,
+    role:             document.getElementById('uRole').value,
+    username:         document.getElementById('uUsername').value || null,
+    team_ids:         Array.from(checked).map(function(cb){ return Number(cb.value); }),
+    jingfen_realname: document.getElementById('uJfRealname').value || null,
+    jingfen_mobile:   document.getElementById('uJfMobile').value || null,
   };
   const pwd = document.getElementById('uPassword').value;
   if (pwd) body.password = pwd;
-  body.jingfen_mobile = document.getElementById('uJfMobile').value || null;
-  body.jingfen_realname = document.getElementById('uJfRealname').value || null;
   const jfPwd = document.getElementById('uJfPwd').value;
   if (jfPwd) body.jingfen_password = jfPwd;
   const res = await api(id ? '/api/users/'+id : '/api/users', {
     method: id ? 'PUT' : 'POST', body: JSON.stringify(body)
   });
   if (res && res.ok) { hideUserForm(); loadAll(); }
+  else { var err = document.getElementById('userFormErr'); err.textContent = (res&&res.message)||'保存失败'; err.style.display='block'; }
 });
 
 loadAll();

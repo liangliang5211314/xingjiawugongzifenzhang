@@ -1,11 +1,11 @@
-const { findById, updateUser } = require('../models/user-model');
+const { findById, getUserTeamIds, updateUser } = require('../models/user-model');
 const { getTeamById } = require('../models/team-model');
 const { listRecords } = require('../models/record-model');
 const { listSettlements } = require('../models/settlement-model');
 const { safeUser } = require('../services/auth-service');
 const { fromCents } = require('../utils/money');
 
-function currentMonth() {
+function currentMonthStr() {
   return new Date().toISOString().slice(0, 7);
 }
 
@@ -13,35 +13,43 @@ function currentMonth() {
 function memberMeController(req, res, next) {
   try {
     const user = findById(req.user.id);
-    const team = user.team_id ? getTeamById(user.team_id) : null;
-    res.json({ ok: true, data: { user: safeUser(user), team } });
+    const teamIds = getUserTeamIds(user.id);
+    const teams = teamIds.map(id => getTeamById(id)).filter(Boolean);
+    res.json({ ok: true, data: { user: safeUser(user), teams } });
   } catch (e) { next(e); }
 }
 
-// GET /member/income/current
+// GET /member/income/current?month=&team_id=
 function memberCurrentIncomeController(req, res, next) {
   try {
     const user = findById(req.user.id);
-    if (!user.name || !user.team_id) return res.json({ ok: true, data: null, message: '账号未完善信息' });
-    const month = req.query.month || currentMonth();
-    const records = listRecords({ teamId: user.team_id, month });
+    if (!user.name) return res.json({ ok: true, data: null, message: '账号未设置姓名' });
+    const teamId = req.query.team_id ? Number(req.query.team_id) : null;
+    if (!teamId) return res.json({ ok: true, data: null });
+    const month = req.query.month || currentMonthStr();
+    const records = listRecords({ teamId, month });
     const mine = records.filter(r => r.person_name === user.name)
       .map(r => ({ ...r, amount: fromCents(r.amount) }));
-    const [settlements] = listSettlements({ teamId: user.team_id, month }) || [];
-    const mySettlement = settlements?.result_json?.members?.find(m => m.name === user.name) || null;
-    res.json({ ok: true, data: { month, records: mine, settlement: mySettlement, year_compare: {
-      last:  settlements?.year_compare_last  != null ? fromCents(settlements.year_compare_last)  : null,
-      prev2: settlements?.year_compare_prev2 != null ? fromCents(settlements.year_compare_prev2) : null,
-    }}});
+    const [settlement] = listSettlements({ teamId, month }) || [];
+    const mySettlement = settlement?.result_json?.members?.find(m => m.name === user.name) || null;
+    res.json({ ok: true, data: {
+      month, records: mine, settlement: mySettlement,
+      year_compare: {
+        last:  settlement?.year_compare_last  != null ? fromCents(settlement.year_compare_last)  : null,
+        prev2: settlement?.year_compare_prev2 != null ? fromCents(settlement.year_compare_prev2) : null,
+      },
+    }});
   } catch (e) { next(e); }
 }
 
-// GET /member/income/history
+// GET /member/income/history?team_id=
 function memberIncomeHistoryController(req, res, next) {
   try {
     const user = findById(req.user.id);
-    if (!user.name || !user.team_id) return res.json({ ok: true, data: [] });
-    const settlements = listSettlements({ teamId: user.team_id });
+    if (!user.name) return res.json({ ok: true, data: [] });
+    const teamId = req.query.team_id ? Number(req.query.team_id) : user.team_id;
+    if (!teamId) return res.json({ ok: true, data: [] });
+    const settlements = listSettlements({ teamId });
     const history = settlements.map(s => {
       const myData = s.result_json?.members?.find(m => m.name === user.name);
       return {
@@ -59,11 +67,12 @@ function memberIncomeHistoryController(req, res, next) {
 // PUT /member/profile
 function memberUpdateProfileController(req, res, next) {
   try {
-    const { name, jingfen_mobile, jingfen_password } = req.body;
+    const { name, jingfen_mobile, jingfen_password, jingfen_realname } = req.body;
     const fields = {};
     if (name !== undefined)             fields.name = name;
     if (jingfen_mobile !== undefined)   fields.jingfen_mobile = jingfen_mobile;
     if (jingfen_password !== undefined) fields.jingfen_password = jingfen_password;
+    if (jingfen_realname !== undefined) fields.jingfen_realname = jingfen_realname;
     updateUser(req.user.id, fields);
     res.json({ ok: true });
   } catch (e) { next(e); }
