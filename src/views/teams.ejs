@@ -26,6 +26,10 @@ const body = `
 
     <div id="leaderFields" style="border:1px solid #e8e8e8;border-radius:8px;padding:14px;margin-top:8px">
       <div style="font-size:13px;color:#888;margin-bottom:10px">负责人配置</div>
+      <div id="memberTags" style="display:none;margin-bottom:10px;font-size:13px;color:#555">
+        <span style="color:#888">团队成员：</span>
+        <span id="memberTagList"></span>
+      </div>
       <div class="form-grid">
         <div class="form-row">
           <label>负责人姓名 *</label>
@@ -161,11 +165,23 @@ async function showTeamForm(team) {
   document.getElementById('tLeaderRatio').value = cfg.leader_ratio != null ? (cfg.leader_ratio * 100).toFixed(0) : '20';
   document.getElementById('tReimburse').checked = cfg.reimburse_expenses !== false;
 
-  // 加载该团队的成员
+  // 加载该团队的所有成员（含admin）
   var members = [];
   if (team && team.id) {
-    var res = await api('/api/users?team_id=' + team.id + '&role=member');
+    var res = await api('/api/users?team_id=' + team.id);
     members = (res ? res.data || [] : []).filter(function(m){ return m.name; });
+  }
+
+  // 显示团队成员标签
+  var tagsEl = document.getElementById('memberTags');
+  var tagListEl = document.getElementById('memberTagList');
+  if (members.length > 0) {
+    tagListEl.innerHTML = members.map(function(m) {
+      return '<span style="display:inline-block;background:#f0f0f0;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px">' + m.name + '</span>';
+    }).join('');
+    tagsEl.style.display = 'block';
+  } else {
+    tagsEl.style.display = 'none';
   }
 
   // 负责人下拉建议
