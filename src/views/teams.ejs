@@ -108,8 +108,8 @@ async function loadTeams() {
   }).join('') || '<tr><td colspan="6">暂无团队</td></tr>';
 }
 
-function setLeaderName(name) {
-  document.getElementById('tLeaderName').value = name;
+function pickLeader(i) {
+  if (currentFormMembers[i]) document.getElementById('tLeaderName').value = currentFormMembers[i].name;
 }
 
 function onRuleChange() {
@@ -185,11 +185,10 @@ async function showTeamForm(team) {
   var tagsEl = document.getElementById('memberTags');
   var tagListEl = document.getElementById('memberTagList');
   if (currentFormMembers.length > 0) {
-    tagListEl.innerHTML = currentFormMembers.map(function(m) {
-      return '<span onclick="setLeaderName(\'' + m.name.replace(/'/g, "\\'") + '\')" ' +
-        'title="点击设为负责人" ' +
-        'style="display:inline-block;background:#f0f0f0;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px;cursor:pointer;transition:background .15s" ' +
-        'onmouseover="this.style.background=\'#dde4ff\'" onmouseout="this.style.background=\'#f0f0f0\'">' + m.name + '</span>';
+    tagListEl.innerHTML = currentFormMembers.map(function(m, i) {
+      return '<span onclick="pickLeader(' + i + ')" title="点击设为负责人" ' +
+        'style="display:inline-block;background:#f0f0f0;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px;cursor:pointer">' +
+        m.name + '</span>';
     }).join('');
     tagsEl.style.display = 'block';
   } else {
