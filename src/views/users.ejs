@@ -38,6 +38,14 @@ const body = `
       <label>登录密码 <small>（留空则不改密码）</small></label>
       <input type="password" id="uPassword" placeholder="新密码">
     </div>
+    <div class="form-row">
+      <label>京粉手机号</label>
+      <input type="text" id="uJfMobile" placeholder="京粉注册手机号">
+    </div>
+    <div class="form-row">
+      <label>京粉密码</label>
+      <input type="password" id="uJfPwd" placeholder="京粉密码">
+    </div>
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">保存</button>
       <button type="button" class="btn" onclick="hideUserForm()">取消</button>
@@ -88,6 +96,8 @@ function showUserForm(user) {
   document.getElementById('uRole').value = user ? user.role : 'member';
   document.getElementById('uUsername').value = user ? user.username||'' : '';
   document.getElementById('uPassword').value = '';
+  document.getElementById('uJfMobile').value = user ? user.jingfen_mobile||'' : '';
+  document.getElementById('uJfPwd').value = '';
   document.getElementById('userFormErr').style.display = 'none';
 }
 function hideUserForm() { document.getElementById('userFormWrap').style.display = 'none'; }
@@ -105,6 +115,9 @@ document.getElementById('userForm').addEventListener('submit', async function(e)
   };
   const pwd = document.getElementById('uPassword').value;
   if (pwd) body.password = pwd;
+  body.jingfen_mobile = document.getElementById('uJfMobile').value || null;
+  const jfPwd = document.getElementById('uJfPwd').value;
+  if (jfPwd) body.jingfen_password = jfPwd;
   const res = await api(id ? '/api/users/'+id : '/api/users', {
     method: id ? 'PUT' : 'POST', body: JSON.stringify(body)
   });

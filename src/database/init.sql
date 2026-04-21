@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS users (
   openid        TEXT UNIQUE,                    -- 微信openid
   unionid       TEXT,
   team_id       INTEGER REFERENCES teams(id),
+  jingfen_mobile   TEXT,                        -- 京粉手机号
+  jingfen_password TEXT,                        -- 京粉密码
   status        INTEGER NOT NULL DEFAULT 1,
   created_at    TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP

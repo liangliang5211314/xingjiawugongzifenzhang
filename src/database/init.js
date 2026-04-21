@@ -62,6 +62,8 @@ function runMigrations() {
     addColumnIfMissing('users', 'openid TEXT');
     addColumnIfMissing('users', 'unionid TEXT');
     addColumnIfMissing('users', 'updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
+    addColumnIfMissing('users', 'jingfen_mobile TEXT');
+    addColumnIfMissing('users', 'jingfen_password TEXT');
   }
 
   // 将旧records表数据迁移到income_records

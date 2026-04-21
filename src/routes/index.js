@@ -8,7 +8,7 @@ const { listRecordsController, createRecordController, updateRecordController, d
 const { runSettlementController, listSettlementsController, pushSettlementController } = require('../controllers/settlement-controller');
 const { syncRecordsController, syncSettlementController } = require('../controllers/feishu-controller');
 const { dashboardController } = require('../controllers/stats-controller');
-const { memberMeController, memberCurrentIncomeController, memberIncomeHistoryController } = require('../controllers/member-h5-controller');
+const { memberMeController, memberCurrentIncomeController, memberIncomeHistoryController, memberUpdateProfileController } = require('../controllers/member-h5-controller');
 const { listPushLogs } = require('../models/push-log-model');
 
 // ─── 管理端 API ────────────────────────────────────────────────
@@ -59,6 +59,7 @@ authRouter.get('/wechat/callback', wechatCallbackController);
 // ─── 成员H5 API ────────────────────────────────────────────────
 const memberRouter = express.Router();
 memberRouter.get('/me',              authenticate, memberMeController);
+memberRouter.put('/profile',         authenticate, memberUpdateProfileController);
 memberRouter.get('/income/current',  authenticate, memberCurrentIncomeController);
 memberRouter.get('/income/history',  authenticate, memberIncomeHistoryController);
 

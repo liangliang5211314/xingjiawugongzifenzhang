@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>我的收益</title>
   <link rel="stylesheet" href="/member.css">
+  <style>
+    .m-edit-btn { float:right; font-size:13px; color:#6c63ff; background:none; border:1px solid #6c63ff; border-radius:12px; padding:3px 12px; cursor:pointer; }
+    .m-modal-mask { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; }
+    .m-modal-mask.show { display:flex; align-items:flex-end; }
+    .m-modal { background:#fff; border-radius:16px 16px 0 0; width:100%; padding:24px 20px 36px; }
+    .m-modal h3 { margin:0 0 18px; font-size:17px; }
+    .m-field { margin-bottom:14px; }
+    .m-field label { display:block; font-size:13px; color:#666; margin-bottom:5px; }
+    .m-field input { width:100%; box-sizing:border-box; border:1px solid #ddd; border-radius:8px; padding:10px 12px; font-size:15px; }
+    .m-field input:focus { outline:none; border-color:#6c63ff; }
+    .m-modal-btns { display:flex; gap:10px; margin-top:20px; }
+    .m-modal-btns button { flex:1; padding:12px; border-radius:10px; border:none; font-size:15px; cursor:pointer; }
+    .m-btn-cancel { background:#f0f0f0; color:#333; }
+    .m-btn-save { background:#6c63ff; color:#fff; }
+  </style>
 </head>
 <body>
   <div class="m-app">
@@ -19,6 +34,7 @@
         <div id="userName" class="m-name">加载中...</div>
         <div id="teamName" class="m-team">-</div>
       </div>
+      <button class="m-edit-btn" onclick="openEdit()">编辑资料</button>
     </div>
 
     <div class="m-month-bar">
@@ -42,6 +58,29 @@
     </div>
   </div>
 
+  <!-- 编辑资料弹窗 -->
+  <div class="m-modal-mask" id="editMask">
+    <div class="m-modal">
+      <h3>编辑个人资料</h3>
+      <div class="m-field">
+        <label>真实姓名（需与账单中姓名一致）</label>
+        <input type="text" id="editName" placeholder="请输入真实姓名">
+      </div>
+      <div class="m-field">
+        <label>京粉手机号</label>
+        <input type="tel" id="editJfMobile" placeholder="请输入京粉注册手机号">
+      </div>
+      <div class="m-field">
+        <label>京粉密码</label>
+        <input type="password" id="editJfPwd" placeholder="请输入京粉密码">
+      </div>
+      <div class="m-modal-btns">
+        <button class="m-btn-cancel" onclick="closeEdit()">取消</button>
+        <button class="m-btn-save" onclick="saveProfile()">保存</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/member.js"></script>
   <script>
     var token = '';
@@ -56,8 +95,10 @@
       return t;
     }
 
-    async function memberApi(url) {
-      var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    async function memberApi(url, options) {
+      var opts = options || {};
+      opts.headers = Object.assign({ Authorization: 'Bearer ' + token }, opts.headers || {});
+      var res = await fetch(url, opts);
       if (res.status === 401) { location.href = '/auth/wechat/start'; return null; }
       return res.json();
     }
@@ -76,6 +117,35 @@
       if (next > today) return;
       currentMonth = next;
       loadIncome();
+    }
+
+    function openEdit() {
+      document.getElementById('editName').value = currentUser ? currentUser.name || '' : '';
+      document.getElementById('editJfMobile').value = currentUser ? currentUser.jingfen_mobile || '' : '';
+      document.getElementById('editJfPwd').value = '';
+      document.getElementById('editMask').classList.add('show');
+    }
+    function closeEdit() {
+      document.getElementById('editMask').classList.remove('show');
+    }
+
+    async function saveProfile() {
+      var name = document.getElementById('editName').value.trim();
+      var jfMobile = document.getElementById('editJfMobile').value.trim();
+      var jfPwd = document.getElementById('editJfPwd').value;
+      var body = { name: name, jingfen_mobile: jfMobile };
+      if (jfPwd) body.jingfen_password = jfPwd;
+      var res = await memberApi('/member/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (res && res.ok) {
+        closeEdit();
+        init();
+      } else {
+        alert('保存失败，请重试');
+      }
     }
 
     async function init() {
@@ -100,7 +170,6 @@
         return;
       }
 
-      // 结算卡片
       var s = d.settlement;
       if (s) {
         var diffCls = parseFloat(s.diff) >= 0 ? 'green' : 'red';
@@ -111,7 +180,6 @@
         document.getElementById('incomeCards').innerHTML = '<div class="m-empty">本月暂未结算</div>';
       }
 
-      // 年同比
       var cmp = d.year_compare;
       if (cmp && (cmp.last != null || cmp.prev2 != null)) {
         document.getElementById('compareSection').style.display = 'block';
@@ -121,7 +189,6 @@
         document.getElementById('compareContent').innerHTML = cmpHtml;
       }
 
-      // 明细
       var TYPES = { income:'收入', tax:'退税', expense:'支出', adjust:'调整' };
       if (d.records && d.records.length) {
         document.getElementById('recordList').innerHTML = d.records.map(function(r) {

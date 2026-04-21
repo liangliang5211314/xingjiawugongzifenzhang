@@ -1,4 +1,4 @@
-const { findById } = require('../models/user-model');
+const { findById, updateUser } = require('../models/user-model');
 const { getTeamById } = require('../models/team-model');
 const { listRecords } = require('../models/record-model');
 const { listSettlements } = require('../models/settlement-model');
@@ -56,4 +56,17 @@ function memberIncomeHistoryController(req, res, next) {
   } catch (e) { next(e); }
 }
 
-module.exports = { memberMeController, memberCurrentIncomeController, memberIncomeHistoryController };
+// PUT /member/profile
+function memberUpdateProfileController(req, res, next) {
+  try {
+    const { name, jingfen_mobile, jingfen_password } = req.body;
+    const fields = {};
+    if (name !== undefined)             fields.name = name;
+    if (jingfen_mobile !== undefined)   fields.jingfen_mobile = jingfen_mobile;
+    if (jingfen_password !== undefined) fields.jingfen_password = jingfen_password;
+    updateUser(req.user.id, fields);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+}
+
+module.exports = { memberMeController, memberCurrentIncomeController, memberIncomeHistoryController, memberUpdateProfileController };
