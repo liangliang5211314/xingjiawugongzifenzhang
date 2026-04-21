@@ -22,6 +22,9 @@
         <li><a href="/admin/push-logs" class="<%= page==='pushlogs'?'active':'' %>">📨 推送日志</a></li>
       </ul>
       <div class="sidebar-footer">
+        <button onclick="showChangelog()" class="btn-logout" style="margin-bottom:6px;background:#2a2d3e;color:#aaa;font-size:12px">
+          v<%= appVersion || '1.0.0' %> 更新日志
+        </button>
         <button onclick="logout()" class="btn-logout">退出登录</button>
       </div>
     </nav>
@@ -30,13 +33,46 @@
       <div class="topbar">
         <button class="menu-btn" onclick="toggleSidebar()">☰</button>
         <span class="topbar-title"><%= title || '团队结算系统' %></span>
+        <span style="margin-left:auto;font-size:12px;color:#aaa;padding-right:8px;cursor:pointer" onclick="showChangelog()">v<%= appVersion || '1.0.0' %></span>
       </div>
       <div class="content-body">
         <%- body %>
       </div>
     </main>
   </div>
+
+  <!-- 更新日志弹窗 -->
+  <div id="changelogModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+    <div style="background:#fff;border-radius:12px;padding:28px;width:520px;max-width:90vw;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <h3 style="margin:0;font-size:18px">更新日志</h3>
+        <button onclick="document.getElementById('changelogModal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">✕</button>
+      </div>
+      <div id="changelogContent" style="font-size:14px;line-height:1.8">加载中...</div>
+    </div>
+  </div>
+
   <script src="/admin.js"></script>
+  <script>
+  async function showChangelog() {
+    var modal = document.getElementById('changelogModal');
+    modal.style.display = 'flex';
+    var res = await fetch('/api/version');
+    var data = await res.json();
+    var html = (data.changelog || []).map(function(c) {
+      var isCurrent = c.ver === data.version;
+      return '<div style="margin-bottom:16px;padding:12px 14px;border-radius:8px;background:' + (isCurrent ? '#f0f4ff' : '#fafafa') + ';border:1px solid ' + (isCurrent ? '#6c63ff33' : '#eee') + '">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+          '<span style="font-weight:700;color:#6c63ff">v' + c.ver + '</span>' +
+          (isCurrent ? '<span style="background:#6c63ff;color:#fff;font-size:11px;padding:1px 7px;border-radius:10px">当前版本</span>' : '') +
+          '<span style="color:#999;font-size:12px;margin-left:auto">' + c.date + '</span>' +
+        '</div>' +
+        '<div style="color:#555">' + c.notes + '</div>' +
+      '</div>';
+    }).join('');
+    document.getElementById('changelogContent').innerHTML = html || '暂无日志';
+  }
+  </script>
   <%- pageScript || '' %>
 </body>
 </html>

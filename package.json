@@ -1,6 +1,6 @@
 {
   "name": "team-settlement-system",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "description": "团队收益结算系统 - Express + SQLite + JWT + 微信公众号 + 飞书",
   "main": "src/server.js",
   "scripts": {
