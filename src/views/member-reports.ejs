@@ -1,0 +1,98 @@
+<%
+const title = '成员上报';
+const page  = 'memberreports';
+const body = `
+<div class="page-header">
+  <h2>成员收益上报</h2>
+</div>
+
+<div class="card form-card">
+  <div class="form-grid">
+    <div class="form-row">
+      <label>团队</label>
+      <select id="filterTeam">
+        <option value="">全部团队</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>月份</label>
+      <input type="month" id="filterMonth">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="loadReports()">查询</button>
+    </div>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>月份</th>
+        <th>团队</th>
+        <th>姓名</th>
+        <th>京粉实名人</th>
+        <th>上报金额</th>
+        <th>更新时间</th>
+        <th>截图</th>
+        <th>备注</th>
+      </tr>
+    </thead>
+    <tbody id="reportListBody"><tr><td colspan="8">加载中...</td></tr></tbody>
+  </table>
+</div>
+
+<div id="imgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center;" onclick="this.style.display='none'">
+  <img id="imgModalSrc" style="max-width:90vw;max-height:90vh;border-radius:8px;">
+</div>
+`;
+const pageScript = `<script>
+let allTeams = [];
+
+async function initPage() {
+  const tr = await api('/api/teams');
+  allTeams = tr ? tr.data || [] : [];
+  document.getElementById('filterTeam').innerHTML =
+    '<option value="">全部团队</option>' +
+    allTeams.map(function(t){ return '<option value="'+t.id+'">'+t.name+'</option>'; }).join('');
+  document.getElementById('filterMonth').value = new Date().toISOString().slice(0,7);
+  loadReports();
+}
+
+async function loadReports() {
+  var teamId = document.getElementById('filterTeam').value;
+  var month  = document.getElementById('filterMonth').value;
+  var url = '/api/member-reports';
+  var params = [];
+  if (teamId) params.push('team_id='+teamId);
+  if (month)  params.push('month='+month);
+  if (params.length) url += '?' + params.join('&');
+  var res = await api(url);
+  var list = res ? res.data || [] : [];
+  document.getElementById('reportListBody').innerHTML = list.length
+    ? list.map(function(r) {
+        return '<tr>' +
+          '<td>'+r.month+'</td>' +
+          '<td>'+(r.team_name||'-')+'</td>' +
+          '<td><strong>'+(r.user_name||'-')+'</strong></td>' +
+          '<td>'+(r.jingfen_realname||'-')+'</td>' +
+          '<td style="font-weight:700;color:#6c63ff">¥'+parseFloat(r.amount).toFixed(2)+'</td>' +
+          '<td>'+(r.updated_at||'').slice(0,16)+'</td>' +
+          '<td>'+(r.screenshot
+            ? '<img src="'+r.screenshot+'" style="height:48px;border-radius:4px;cursor:pointer" onclick="showImg(\\'' + r.screenshot + '\\')">'
+            : '-')+'</td>' +
+          '<td>'+(r.note||'-')+'</td>' +
+          '</tr>';
+      }).join('')
+    : '<tr><td colspan="8">暂无上报数据</td></tr>';
+}
+
+function showImg(src) {
+  document.getElementById('imgModalSrc').src = src;
+  document.getElementById('imgModal').style.display = 'flex';
+}
+
+initPage();
+</script>`;
+%>
+<%- include('layout', { title, page, body, pageScript }) %>

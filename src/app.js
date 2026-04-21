@@ -28,7 +28,8 @@ app.get('/admin/teams',       (req, res) => res.render('teams'));
 app.get('/admin/users',       (req, res) => res.render('users'));
 app.get('/admin/records',     (req, res) => res.render('records'));
 app.get('/admin/settlement',  (req, res) => res.render('settlement'));
-app.get('/admin/push-logs',   (req, res) => res.render('push-logs'));
+app.get('/admin/push-logs',       (req, res) => res.render('push-logs'));
+app.get('/admin/member-reports',  (req, res) => res.render('member-reports'));
 
 // 成员H5页面
 app.get('/h5/home',    (req, res) => res.render('member/home'));

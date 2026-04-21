@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   team_id       INTEGER REFERENCES teams(id),
   jingfen_mobile   TEXT,                        -- 京粉手机号
   jingfen_password TEXT,                        -- 京粉密码
+  jingfen_realname TEXT,                        -- 京粉实名人
   status        INTEGER NOT NULL DEFAULT 1,
   created_at    TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -65,6 +66,21 @@ CREATE TABLE IF NOT EXISTS settlements (
   updated_at         TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(team_id, month)
 );
+
+-- 成员收益上报
+CREATE TABLE IF NOT EXISTS member_income_reports (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  team_id      INTEGER NOT NULL REFERENCES teams(id),
+  month        TEXT    NOT NULL,
+  amount       INTEGER NOT NULL DEFAULT 0,   -- 分（×100），截断小数
+  screenshot   TEXT,                         -- 图片路径 /uploads/xxx.jpg
+  note         TEXT,
+  created_at   TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, team_id, month)
+);
+CREATE INDEX IF NOT EXISTS idx_member_reports_team_month ON member_income_reports(team_id, month);
 
 -- 推送日志
 CREATE TABLE IF NOT EXISTS push_logs (

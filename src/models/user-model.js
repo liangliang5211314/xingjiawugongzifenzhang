@@ -13,7 +13,7 @@ function findByOpenid(openid) {
 }
 
 function listUsers({ teamId, role } = {}) {
-  let sql = 'SELECT id,name,mobile,username,role,openid,team_id,status,jingfen_mobile,jingfen_password,created_at,updated_at FROM users WHERE 1=1';
+  let sql = 'SELECT id,name,mobile,username,role,openid,team_id,status,jingfen_mobile,jingfen_password,jingfen_realname,created_at,updated_at FROM users WHERE 1=1';
   const params = [];
   if (teamId) { sql += ' AND team_id = ?'; params.push(teamId); }
   if (role)   { sql += ' AND role = ?';    params.push(role); }
@@ -33,7 +33,7 @@ function createUser({ name, mobile, username, password_hash, role, openid, union
 }
 
 function updateUser(id, fields) {
-  const allowed = ['name', 'mobile', 'username', 'password_hash', 'role', 'openid', 'unionid', 'team_id', 'status', 'jingfen_mobile', 'jingfen_password'];
+  const allowed = ['name', 'mobile', 'username', 'password_hash', 'role', 'openid', 'unionid', 'team_id', 'status', 'jingfen_mobile', 'jingfen_password', 'jingfen_realname'];
   const sets = [];
   const vals = [];
   for (const [k, v] of Object.entries(fields)) {

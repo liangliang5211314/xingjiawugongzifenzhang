@@ -6,19 +6,27 @@
   <title>我的收益</title>
   <link rel="stylesheet" href="/member.css">
   <style>
-    .m-edit-btn { float:right; font-size:13px; color:#6c63ff; background:none; border:1px solid #6c63ff; border-radius:12px; padding:3px 12px; cursor:pointer; }
-    .m-modal-mask { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; }
+    .m-edit-btn { font-size:13px; color:#6c63ff; background:none; border:1px solid #6c63ff; border-radius:12px; padding:3px 12px; cursor:pointer; }
+    .m-modal-mask { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; overflow-y:auto; }
     .m-modal-mask.show { display:flex; align-items:flex-end; }
     .m-modal { background:#fff; border-radius:16px 16px 0 0; width:100%; padding:24px 20px 36px; }
     .m-modal h3 { margin:0 0 18px; font-size:17px; }
     .m-field { margin-bottom:14px; }
     .m-field label { display:block; font-size:13px; color:#666; margin-bottom:5px; }
-    .m-field input { width:100%; box-sizing:border-box; border:1px solid #ddd; border-radius:8px; padding:10px 12px; font-size:15px; }
+    .m-field input[type=text],.m-field input[type=password],.m-field input[type=tel],.m-field input[type=number],.m-field input[type=month] {
+      width:100%; box-sizing:border-box; border:1px solid #ddd; border-radius:8px; padding:10px 12px; font-size:15px;
+    }
     .m-field input:focus { outline:none; border-color:#6c63ff; }
     .m-modal-btns { display:flex; gap:10px; margin-top:20px; }
     .m-modal-btns button { flex:1; padding:12px; border-radius:10px; border:none; font-size:15px; cursor:pointer; }
     .m-btn-cancel { background:#f0f0f0; color:#333; }
     .m-btn-save { background:#6c63ff; color:#fff; }
+    .m-report-card { background:#f0f4ff; border-radius:12px; padding:14px; margin-bottom:8px; }
+    .m-report-amount { font-size:22px; font-weight:700; color:#6c63ff; }
+    .m-report-meta { font-size:12px; color:#999; margin-top:4px; }
+    .m-img-preview { margin-top:8px; max-width:100%; max-height:160px; border-radius:8px; display:none; }
+    .m-upload-label { display:inline-block; padding:8px 16px; background:#f0f0f0; border-radius:8px; font-size:14px; cursor:pointer; }
+    .m-header-row { display:flex; align-items:center; justify-content:space-between; }
   </style>
 </head>
 <body>
@@ -28,19 +36,30 @@
       <a href="/h5/history" class="m-link">历史记录 →</a>
     </div>
 
-    <div id="userInfo" class="m-card m-user-card">
-      <div class="m-avatar">👤</div>
-      <div class="m-user-info">
-        <div id="userName" class="m-name">加载中...</div>
-        <div id="teamName" class="m-team">-</div>
+    <div class="m-card m-user-card">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="m-avatar">👤</div>
+        <div class="m-user-info" style="flex:1">
+          <div id="userName" class="m-name">加载中...</div>
+          <div id="teamName" class="m-team">-</div>
+        </div>
+        <button class="m-edit-btn" onclick="openEdit()">编辑资料</button>
       </div>
-      <button class="m-edit-btn" onclick="openEdit()">编辑资料</button>
     </div>
 
     <div class="m-month-bar">
       <button onclick="prevMonth()">‹</button>
       <span id="monthLabel">-</span>
       <button onclick="nextMonth()">›</button>
+    </div>
+
+    <!-- 本月上报 -->
+    <div class="m-card">
+      <div class="m-header-row" style="margin-bottom:12px">
+        <span class="m-card-title" style="margin:0">本月收益上报</span>
+        <button class="m-edit-btn" onclick="openReport()">填写上报</button>
+      </div>
+      <div id="reportStatus"><div class="m-empty">本月暂未上报</div></div>
     </div>
 
     <div id="incomeCards" class="m-stats">
@@ -67,6 +86,10 @@
         <input type="text" id="editName" placeholder="请输入真实姓名">
       </div>
       <div class="m-field">
+        <label>京粉实名人</label>
+        <input type="text" id="editJfRealname" placeholder="京粉账号实名人姓名">
+      </div>
+      <div class="m-field">
         <label>京粉手机号</label>
         <input type="tel" id="editJfMobile" placeholder="请输入京粉注册手机号">
       </div>
@@ -77,6 +100,35 @@
       <div class="m-modal-btns">
         <button class="m-btn-cancel" onclick="closeEdit()">取消</button>
         <button class="m-btn-save" onclick="saveProfile()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 上报收益弹窗 -->
+  <div class="m-modal-mask" id="reportMask">
+    <div class="m-modal">
+      <h3>上报本月京粉收益</h3>
+      <div class="m-field">
+        <label>月份</label>
+        <input type="month" id="reportMonth">
+      </div>
+      <div class="m-field">
+        <label>本月京粉收益（元，小数点后两位有效）</label>
+        <input type="number" id="reportAmount" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="m-field">
+        <label>收益截图</label>
+        <label class="m-upload-label" for="reportImg">📷 选择图片</label>
+        <input type="file" id="reportImg" accept="image/*" style="display:none" onchange="previewImg(this)">
+        <img id="imgPreview" class="m-img-preview">
+      </div>
+      <div class="m-field">
+        <label>备注（可选）</label>
+        <input type="text" id="reportNote" placeholder="可选说明">
+      </div>
+      <div class="m-modal-btns">
+        <button class="m-btn-cancel" onclick="closeReport()">取消</button>
+        <button class="m-btn-save" id="btnSubmitReport" onclick="submitReport()">提交</button>
       </div>
     </div>
   </div>
@@ -97,7 +149,9 @@
 
     async function memberApi(url, options) {
       var opts = options || {};
-      opts.headers = Object.assign({ Authorization: 'Bearer ' + token }, opts.headers || {});
+      var headers = { Authorization: 'Bearer ' + token };
+      if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+      opts.headers = Object.assign(headers, opts.headers || {});
       var res = await fetch(url, opts);
       if (res.status === 401) { location.href = '/auth/wechat/start'; return null; }
       return res.json();
@@ -107,7 +161,7 @@
       var parts = currentMonth.split('-').map(Number);
       var y = parts[0], m = parts[1];
       currentMonth = m === 1 ? (y-1)+'-12' : y+'-'+(m-1).toString().padStart(2,'0');
-      loadIncome();
+      loadAll();
     }
     function nextMonth() {
       var parts = currentMonth.split('-').map(Number);
@@ -116,35 +170,96 @@
       var next = m === 12 ? (y+1)+'-01' : y+'-'+(m+1).toString().padStart(2,'0');
       if (next > today) return;
       currentMonth = next;
-      loadIncome();
+      loadAll();
     }
 
+    // ── 编辑资料 ──
     function openEdit() {
-      document.getElementById('editName').value = currentUser ? currentUser.name || '' : '';
-      document.getElementById('editJfMobile').value = currentUser ? currentUser.jingfen_mobile || '' : '';
+      document.getElementById('editName').value = currentUser ? currentUser.name||'' : '';
+      document.getElementById('editJfRealname').value = currentUser ? currentUser.jingfen_realname||'' : '';
+      document.getElementById('editJfMobile').value = currentUser ? currentUser.jingfen_mobile||'' : '';
       document.getElementById('editJfPwd').value = '';
       document.getElementById('editMask').classList.add('show');
     }
-    function closeEdit() {
-      document.getElementById('editMask').classList.remove('show');
-    }
+    function closeEdit() { document.getElementById('editMask').classList.remove('show'); }
 
     async function saveProfile() {
-      var name = document.getElementById('editName').value.trim();
-      var jfMobile = document.getElementById('editJfMobile').value.trim();
-      var jfPwd = document.getElementById('editJfPwd').value;
-      var body = { name: name, jingfen_mobile: jfMobile };
-      if (jfPwd) body.jingfen_password = jfPwd;
-      var res = await memberApi('/member/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+      var body = {
+        name: document.getElementById('editName').value.trim(),
+        jingfen_realname: document.getElementById('editJfRealname').value.trim(),
+        jingfen_mobile: document.getElementById('editJfMobile').value.trim(),
+      };
+      var pwd = document.getElementById('editJfPwd').value;
+      if (pwd) body.jingfen_password = pwd;
+      var res = await memberApi('/member/profile', { method:'PUT', body: JSON.stringify(body) });
+      if (res && res.ok) { closeEdit(); init(); } else { alert('保存失败，请重试'); }
+    }
+
+    // ── 上报收益 ──
+    function openReport() {
+      document.getElementById('reportMonth').value = currentMonth;
+      document.getElementById('reportAmount').value = '';
+      document.getElementById('reportNote').value = '';
+      document.getElementById('reportImg').value = '';
+      document.getElementById('imgPreview').style.display = 'none';
+      document.getElementById('reportMask').classList.add('show');
+    }
+    function closeReport() { document.getElementById('reportMask').classList.remove('show'); }
+
+    function previewImg(input) {
+      var file = input.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var img = document.getElementById('imgPreview');
+        img.src = e.target.result;
+        img.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function submitReport() {
+      var month = document.getElementById('reportMonth').value;
+      var amount = document.getElementById('reportAmount').value;
+      if (!month || amount === '') { alert('请填写月份和金额'); return; }
+      var btn = document.getElementById('btnSubmitReport');
+      btn.disabled = true; btn.textContent = '提交中...';
+
+      var fd = new FormData();
+      fd.append('month', month);
+      fd.append('amount', amount);
+      fd.append('note', document.getElementById('reportNote').value);
+      var imgFile = document.getElementById('reportImg').files[0];
+      if (imgFile) fd.append('screenshot', imgFile);
+
+      var res = await fetch('/member/report', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: fd,
       });
-      if (res && res.ok) {
-        closeEdit();
-        init();
+      var data = await res.json();
+      btn.disabled = false; btn.textContent = '提交';
+      if (data && data.ok) {
+        closeReport();
+        loadReport();
+        loadIncome();
       } else {
-        alert('保存失败，请重试');
+        alert(data.message || '提交失败');
+      }
+    }
+
+    async function loadReport() {
+      var res = await memberApi('/member/report?month=' + currentMonth);
+      var el = document.getElementById('reportStatus');
+      if (res && res.data) {
+        var r = res.data;
+        el.innerHTML = '<div class="m-report-card">' +
+          '<div class="m-report-amount">¥' + r.amount.toFixed(2) + '</div>' +
+          '<div class="m-report-meta">已上报 · ' + r.updated_at.slice(0,10) + '</div>' +
+          (r.screenshot ? '<img src="' + r.screenshot + '" style="margin-top:8px;max-width:100%;max-height:140px;border-radius:8px">' : '') +
+          '</div>';
+      } else {
+        el.innerHTML = '<div class="m-empty">本月暂未上报</div>';
       }
     }
 
@@ -156,11 +271,16 @@
       currentUser = me.data.user;
       document.getElementById('userName').textContent = currentUser.name || '未设置姓名';
       document.getElementById('teamName').textContent = me.data.team ? me.data.team.name : '未绑定团队';
+      loadAll();
+    }
+
+    function loadAll() {
+      document.getElementById('monthLabel').textContent = currentMonth;
+      loadReport();
       loadIncome();
     }
 
     async function loadIncome() {
-      document.getElementById('monthLabel').textContent = currentMonth;
       var res = await memberApi('/member/income/current?month=' + currentMonth);
       if (!res || !res.ok) return;
       var d = res.data;
@@ -169,7 +289,6 @@
         document.getElementById('recordList').innerHTML = '<div class="m-empty">暂无明细</div>';
         return;
       }
-
       var s = d.settlement;
       if (s) {
         var diffCls = parseFloat(s.diff) >= 0 ? 'green' : 'red';
@@ -179,7 +298,6 @@
       } else {
         document.getElementById('incomeCards').innerHTML = '<div class="m-empty">本月暂未结算</div>';
       }
-
       var cmp = d.year_compare;
       if (cmp && (cmp.last != null || cmp.prev2 != null)) {
         document.getElementById('compareSection').style.display = 'block';
@@ -188,13 +306,12 @@
         if (cmp.prev2 != null) cmpHtml += '<div class="m-compare-item"><span>前年同月</span><strong>¥' + cmp.prev2 + '</strong></div>';
         document.getElementById('compareContent').innerHTML = cmpHtml;
       }
-
       var TYPES = { income:'收入', tax:'退税', expense:'支出', adjust:'调整' };
       if (d.records && d.records.length) {
         document.getElementById('recordList').innerHTML = d.records.map(function(r) {
           return '<div class="m-record-item">' +
-            '<span class="m-record-type type-' + r.item_type + '">' + (TYPES[r.item_type] || r.item_type) + '</span>' +
-            '<span class="m-record-name">' + (r.item_name || r.item_type) + '</span>' +
+            '<span class="m-record-type type-' + r.item_type + '">' + (TYPES[r.item_type]||r.item_type) + '</span>' +
+            '<span class="m-record-name">' + (r.item_name||r.item_type) + '</span>' +
             '<span class="m-record-amount ' + (r.item_type==='expense'?'red':'') + '">¥' + r.amount + '</span>' +
             '</div>';
         }).join('');

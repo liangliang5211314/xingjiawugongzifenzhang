@@ -43,6 +43,10 @@ const body = `
       <input type="text" id="uJfMobile" placeholder="京粉注册手机号">
     </div>
     <div class="form-row">
+      <label>京粉实名人</label>
+      <input type="text" id="uJfRealname" placeholder="京粉账号实名人姓名">
+    </div>
+    <div class="form-row">
       <label>京粉密码</label>
       <input type="password" id="uJfPwd" placeholder="京粉密码">
     </div>
@@ -97,6 +101,7 @@ function showUserForm(user) {
   document.getElementById('uUsername').value = user ? user.username||'' : '';
   document.getElementById('uPassword').value = '';
   document.getElementById('uJfMobile').value = user ? user.jingfen_mobile||'' : '';
+  document.getElementById('uJfRealname').value = user ? user.jingfen_realname||'' : '';
   document.getElementById('uJfPwd').value = '';
   document.getElementById('userFormErr').style.display = 'none';
 }
@@ -116,6 +121,7 @@ document.getElementById('userForm').addEventListener('submit', async function(e)
   const pwd = document.getElementById('uPassword').value;
   if (pwd) body.password = pwd;
   body.jingfen_mobile = document.getElementById('uJfMobile').value || null;
+  body.jingfen_realname = document.getElementById('uJfRealname').value || null;
   const jfPwd = document.getElementById('uJfPwd').value;
   if (jfPwd) body.jingfen_password = jfPwd;
   const res = await api(id ? '/api/users/'+id : '/api/users', {

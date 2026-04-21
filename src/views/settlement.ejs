@@ -11,13 +11,14 @@ const body = `
   <div class="form-grid">
     <div class="form-row">
       <label>团队</label>
-      <select id="sTeam"></select>
+      <select id="sTeam" onchange="showTeamFormula()"></select>
     </div>
     <div class="form-row">
       <label>月份</label>
       <input type="month" id="sMonth">
     </div>
   </div>
+  <div id="teamFormulaBox" style="display:none;margin:8px 0 12px;padding:10px 14px;background:#f0f4ff;border-radius:8px;font-size:13px;color:#444;line-height:1.7"></div>
   <div class="form-actions">
     <button class="btn btn-primary" onclick="runSettle()">🧮 运行结算</button>
     <button class="btn" onclick="loadSettlements()">📋 查看已有结算</button>
@@ -66,7 +67,40 @@ async function initPage() {
   document.getElementById('sTeam').innerHTML = allTeams.map(t =>
     '<option value="'+t.id+'">'+t.name+'</option>').join('');
   document.getElementById('sMonth').value = new Date().toISOString().slice(0,7);
+  showTeamFormula();
   loadSettlements();
+}
+
+function showTeamFormula() {
+  var teamId = parseInt(document.getElementById('sTeam').value);
+  var team = allTeams.find(function(t){ return t.id === teamId; });
+  var box = document.getElementById('teamFormulaBox');
+  if (!team) { box.style.display = 'none'; return; }
+  var cfg = {};
+  try { cfg = JSON.parse(team.rule_config || '{}'); } catch(e) {}
+  var html = '<strong>分成规则：</strong>';
+  if (team.rule_type === 'zteam') {
+    var leader = cfg.leader_name || '（未设置）';
+    var ratio  = cfg.ratio != null ? (cfg.ratio * 100).toFixed(0) + '%' : '?%';
+    html += 'Z团队模式 — 负责人 <strong>' + leader + '</strong> 获得总收入×' + ratio + ' + 垫付支出；其余成员平分剩余';
+  } else if (team.rule_type === 'standard') {
+    var leader = cfg.leader_name || '（未设置）';
+    var ratio  = cfg.ratio != null ? (cfg.ratio * 100).toFixed(0) + '%' : '?%';
+    html += '标准模式 — 负责人 <strong>' + leader + '</strong> 获得总收入×' + ratio + '；其余成员平分剩余';
+  } else if (team.rule_type === 'custom') {
+    var allocs = cfg.allocations || [];
+    if (allocs.length) {
+      html += '自定义比例：' + allocs.map(function(a){
+        return '<strong>' + a.name + '</strong> ' + (a.ratio * 100).toFixed(0) + '%';
+      }).join('，');
+    } else {
+      html += '自定义（未配置分配规则）';
+    }
+  } else {
+    html += team.rule_type;
+  }
+  box.innerHTML = html;
+  box.style.display = 'block';
 }
 
 async function runSettle() {

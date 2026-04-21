@@ -1,5 +1,7 @@
+const path = require('path');
+const multer = require('multer');
 const express = require('express');
-const { authenticate, authorize, ensureTeamAccess } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 
 const { loginController, meController, wechatStartController, wechatCallbackController } = require('../controllers/auth-controller');
 const { listTeamsController, createTeamController, updateTeamController } = require('../controllers/team-controller');
@@ -9,7 +11,23 @@ const { runSettlementController, listSettlementsController, pushSettlementContro
 const { syncRecordsController, syncSettlementController } = require('../controllers/feishu-controller');
 const { dashboardController } = require('../controllers/stats-controller');
 const { memberMeController, memberCurrentIncomeController, memberIncomeHistoryController, memberUpdateProfileController } = require('../controllers/member-h5-controller');
+const { submitReportController, getMyReportController, listReportsController } = require('../controllers/member-report-controller');
 const { listPushLogs } = require('../models/push-log-model');
+
+// 图片上传配置（保存到 public/uploads/）
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: path.join(__dirname, '..', '..', 'public', 'uploads'),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.jpg';
+      cb(null, Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    cb(null, file.mimetype.startsWith('image/'));
+  },
+});
 
 // ─── 管理端 API ────────────────────────────────────────────────
 const apiRouter = express.Router();
@@ -35,13 +53,16 @@ apiRouter.put('/records/:id',    authenticate, authorize('admin'), updateRecordC
 apiRouter.delete('/records/:id', authenticate, authorize('admin'), deleteRecordController);
 
 // 结算
-apiRouter.post('/settlements/run',     authenticate, authorize('admin'), runSettlementController);
-apiRouter.get('/settlements',          authenticate, authorize('admin'), listSettlementsController);
+apiRouter.post('/settlements/run',      authenticate, authorize('admin'), runSettlementController);
+apiRouter.get('/settlements',           authenticate, authorize('admin'), listSettlementsController);
 apiRouter.post('/settlements/:id/push', authenticate, authorize('admin'), pushSettlementController);
 
 // 飞书同步
 apiRouter.post('/feishu/sync-records',    authenticate, authorize('admin'), syncRecordsController);
 apiRouter.post('/feishu/sync-settlement', authenticate, authorize('admin'), syncSettlementController);
+
+// 成员上报（管理员查看）
+apiRouter.get('/member-reports', authenticate, authorize('admin'), listReportsController);
 
 // 推送日志
 apiRouter.get('/push-logs', authenticate, authorize('admin'), (req, res, next) => {
@@ -58,9 +79,11 @@ authRouter.get('/wechat/callback', wechatCallbackController);
 
 // ─── 成员H5 API ────────────────────────────────────────────────
 const memberRouter = express.Router();
-memberRouter.get('/me',              authenticate, memberMeController);
-memberRouter.put('/profile',         authenticate, memberUpdateProfileController);
-memberRouter.get('/income/current',  authenticate, memberCurrentIncomeController);
-memberRouter.get('/income/history',  authenticate, memberIncomeHistoryController);
+memberRouter.get('/me',             authenticate, memberMeController);
+memberRouter.put('/profile',        authenticate, memberUpdateProfileController);
+memberRouter.get('/income/current', authenticate, memberCurrentIncomeController);
+memberRouter.get('/income/history', authenticate, memberIncomeHistoryController);
+memberRouter.post('/report',        authenticate, upload.single('screenshot'), submitReportController);
+memberRouter.get('/report',         authenticate, getMyReportController);
 
 module.exports = { apiRouter, authRouter, memberRouter };
