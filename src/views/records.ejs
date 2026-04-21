@@ -73,6 +73,20 @@ const body = `
     <tbody id="recordBody"><tr><td colspan="9">请选择筛选条件后加载</td></tr></tbody>
   </table>
 </div>
+
+<div id="memberReportsSection" style="display:none;margin-top:28px">
+  <h3 style="margin:0 0 12px;font-size:16px">成员自报收益（本月）</h3>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>姓名</th><th>京粉实名人</th><th>上报金额</th><th>更新时间</th><th>截图</th><th>备注</th></tr></thead>
+      <tbody id="memberReportBody"><tr><td colspan="6">-</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="imgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center;" onclick="this.style.display='none'">
+  <img id="imgModalSrc" style="max-width:90vw;max-height:90vh;border-radius:8px;">
+</div>
 `;
 const pageScript = `<script>
 let records = [], teamsMap = {}, allTeams = [];
@@ -99,6 +113,7 @@ async function loadRecords() {
   if (month)  qs.set('month', month);
   const res = await api('/api/records?' + qs.toString());
   records = res ? res.data || [] : [];
+  loadMemberReports(teamId, month);
   document.getElementById('recordBody').innerHTML = records.map(function(r) {
     return '<tr>' +
       '<td>'+r.month+'</td>' +
@@ -172,6 +187,34 @@ document.getElementById('recordForm').addEventListener('submit', async function(
   });
   if (res && res.ok) { hideRecordForm(); loadRecords(); }
 });
+
+async function loadMemberReports(teamId, month) {
+  var section = document.getElementById('memberReportsSection');
+  if (!teamId || !month) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  var url = '/api/member-reports?team_id=' + teamId + '&month=' + month;
+  var res = await api(url);
+  var list = res ? res.data || [] : [];
+  document.getElementById('memberReportBody').innerHTML = list.length
+    ? list.map(function(r) {
+        return '<tr>' +
+          '<td><strong>' + (r.user_name||'-') + '</strong></td>' +
+          '<td>' + (r.jingfen_realname||'-') + '</td>' +
+          '<td style="color:#6c63ff;font-weight:700">¥' + parseFloat(r.amount).toFixed(2) + '</td>' +
+          '<td>' + (r.updated_at||'').slice(0,16) + '</td>' +
+          '<td>' + (r.screenshot
+            ? '<img src="' + r.screenshot + '" style="height:40px;border-radius:4px;cursor:pointer" data-src="' + r.screenshot + '" onclick="showMemberImg(this)">'
+            : '-') + '</td>' +
+          '<td>' + (r.note||'-') + '</td>' +
+          '</tr>';
+      }).join('')
+    : '<tr><td colspan="6" style="color:#999">本月暂无成员上报</td></tr>';
+}
+
+function showMemberImg(el) {
+  document.getElementById('imgModalSrc').src = el.dataset.src;
+  document.getElementById('imgModal').style.display = 'flex';
+}
 
 initPage();
 </script>`;
