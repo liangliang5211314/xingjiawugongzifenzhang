@@ -265,7 +265,7 @@ async function showTeamForm(team) {
   }
 
   // 负责人下拉建议
-  document.getElementById('leaderSuggestions').innerHTML = members.map(function(m) {
+  document.getElementById('leaderSuggestions').innerHTML = currentFormMembers.map(function(m) {
     return '<option value="' + m.name + '">';
   }).join('');
 
