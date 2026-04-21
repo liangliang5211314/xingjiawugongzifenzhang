@@ -18,7 +18,7 @@ const body = `
     <div class="form-row">
       <label>分账规则 *</label>
       <select id="tRuleType" onchange="onRuleChange()">
-        <option value="zteam">zteam（张明亮20%+报销）</option>
+        <option value="zteam">zteam（leader固定比例+报销）</option>
         <option value="standard">standard（leader比例+平分）</option>
         <option value="custom">custom（自定义比例）</option>
       </select>
@@ -45,7 +45,7 @@ const body = `
 `;
 const pageScript = `<script>
 const RULE_HINTS = {
-  zteam: '{"leader_name":"张明亮","leader_ratio":0.2,"reimburse_expenses":true}',
+  zteam: '{"leader_name":"填入leader姓名","leader_ratio":0.2,"reimburse_expenses":true}',
   standard: '{"leader_name":"张三","leader_ratio":0.2}',
   custom: '{"allocations":[{"name":"张三","ratio":0.4},{"name":"李四","ratio":0.6}]}'
 };

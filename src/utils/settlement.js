@@ -76,7 +76,7 @@ function calcStandard(team, personNames, distributableCents) {
 // zteam规则：leader = 总收入×ratio + 报销；其余平分剩余
 function calcZteam(team, personNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents) {
   const config = team.rule_config || {};
-  const leaderName = config.leader_name || '张明亮';
+  const leaderName = config.leader_name || '';
   const leaderRatio = Number(config.leader_ratio ?? 0.2);
   const reimburse = config.reimburse_expenses !== false;
   const result = new Map();

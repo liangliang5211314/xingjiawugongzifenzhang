@@ -4,7 +4,7 @@ const { HttpError } = require('../utils/http-error');
 function normalizeRuleConfig(rule_type, rule_config = {}) {
   if (rule_type === 'zteam') {
     return {
-      leader_name: rule_config.leader_name || '张明亮',
+      leader_name: rule_config.leader_name || '',
       leader_ratio: Number(rule_config.leader_ratio ?? 0.2),
       reimburse_expenses: rule_config.reimburse_expenses !== false,
     };
