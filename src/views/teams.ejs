@@ -1,0 +1,108 @@
+<%
+const title = '团队管理';
+const page  = 'teams';
+const body = `
+<div class="page-header">
+  <h2>团队管理</h2>
+  <button class="btn btn-primary" onclick="showTeamForm()">+ 新建团队</button>
+</div>
+
+<div id="teamFormWrap" style="display:none" class="card form-card">
+  <h3 id="formTitle">新建团队</h3>
+  <form id="teamForm">
+    <input type="hidden" id="teamId">
+    <div class="form-row">
+      <label>团队名称 *</label>
+      <input type="text" id="tName" required placeholder="如：Z团队">
+    </div>
+    <div class="form-row">
+      <label>分账规则 *</label>
+      <select id="tRuleType" onchange="onRuleChange()">
+        <option value="zteam">zteam（张明亮20%+报销）</option>
+        <option value="standard">standard（leader比例+平分）</option>
+        <option value="custom">custom（自定义比例）</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>规则配置 (JSON)</label>
+      <textarea id="tRuleConfig" rows="5" placeholder="{}"></textarea>
+      <small id="ruleHint" class="hint"></small>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">保存</button>
+      <button type="button" class="btn" onclick="hideTeamForm()">取消</button>
+    </div>
+    <div id="teamFormErr" class="error-msg" style="display:none"></div>
+  </form>
+</div>
+
+<div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>ID</th><th>团队名称</th><th>规则类型</th><th>规则配置</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody id="teamListBody"><tr><td colspan="6">加载中...</td></tr></tbody>
+  </table>
+</div>
+`;
+const pageScript = `<script>
+const RULE_HINTS = {
+  zteam: '{"leader_name":"张明亮","leader_ratio":0.2,"reimburse_expenses":true}',
+  standard: '{"leader_name":"张三","leader_ratio":0.2}',
+  custom: '{"allocations":[{"name":"张三","ratio":0.4},{"name":"李四","ratio":0.6}]}'
+};
+
+let teams = [];
+
+async function loadTeams() {
+  const res = await api('/api/teams');
+  if (!res) return;
+  teams = res.data;
+  document.getElementById('teamListBody').innerHTML = teams.map(t =>
+    '<tr>' +
+    '<td>'+t.id+'</td>' +
+    '<td>'+t.name+'</td>' +
+    '<td><span class="badge">'+t.rule_type+'</span></td>' +
+    '<td><code style="font-size:12px">'+JSON.stringify(t.rule_config).slice(0,60)+'...</code></td>' +
+    '<td>'+(t.status ? '✅启用' : '🚫停用')+'</td>' +
+    '<td><button class="btn btn-sm" onclick="editTeam('+t.id+')">编辑</button></td>' +
+    '</tr>'
+  ).join('') || '<tr><td colspan="6">暂无团队</td></tr>';
+}
+
+function onRuleChange() {
+  const type = document.getElementById('tRuleType').value;
+  document.getElementById('tRuleConfig').value = RULE_HINTS[type] || '{}';
+  document.getElementById('ruleHint').textContent = '参考模板已填入，请按需修改';
+}
+
+function showTeamForm(team) {
+  document.getElementById('teamFormWrap').style.display = 'block';
+  document.getElementById('formTitle').textContent = team ? '编辑团队' : '新建团队';
+  document.getElementById('teamId').value = team ? team.id : '';
+  document.getElementById('tName').value = team ? team.name : '';
+  document.getElementById('tRuleType').value = team ? team.rule_type : 'zteam';
+  document.getElementById('tRuleConfig').value = team ? JSON.stringify(team.rule_config, null, 2) : RULE_HINTS.zteam;
+  document.getElementById('teamFormErr').style.display = 'none';
+}
+
+function hideTeamForm() { document.getElementById('teamFormWrap').style.display = 'none'; }
+
+function editTeam(id) { showTeamForm(teams.find(t => t.id === id)); }
+
+document.getElementById('teamForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const id = document.getElementById('teamId').value;
+  const body = {
+    name: document.getElementById('tName').value,
+    rule_type: document.getElementById('tRuleType').value,
+    rule_config: JSON.parse(document.getElementById('tRuleConfig').value || '{}')
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? '/api/teams/'+id : '/api/teams';
+  const res = await api(url, { method, body: JSON.stringify(body) });
+  if (res && res.ok) { hideTeamForm(); loadTeams(); }
+});
+
+loadTeams();
+</script>`;
+%>
+<%- include('layout', { title, page, body, pageScript }) %>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>历史收益</title>
+  <link rel="stylesheet" href="/member.css">
+</head>
+<body>
+  <div class="m-app">
+    <div class="m-header">
+      <a href="/h5/home" class="m-back">← 返回</a>
+      <h1>历史收益</h1>
+    </div>
+    <div id="historyList" class="m-history-list">加载中...</div>
+  </div>
+
+  <script>
+    async function init() {
+      const token = sessionStorage.getItem('member_token');
+      if (!token) { location.href = '/auth/wechat/start'; return; }
+      const res = await fetch('/member/income/history', { headers: { Authorization: 'Bearer ' + token } });
+      if (res.status === 401) { location.href = '/auth/wechat/start'; return; }
+      const data = await res.json();
+      const list = data.data || [];
+      document.getElementById('historyList').innerHTML = list.length
+        ? list.map(h => `
+            <div class="m-history-item">
+              <div class="m-history-month">${h.month}</div>
+              <div class="m-history-row">
+                <span>团队总收入</span>
+                <strong>¥${h.total_income}</strong>
+              </div>
+              ${h.should_get != null ? `
+              <div class="m-history-row">
+                <span>我的应收</span>
+                <strong class="green">¥${h.should_get}</strong>
+              </div>` : ''}
+              ${h.diff != null ? `
+              <div class="m-history-row">
+                <span>差额</span>
+                <strong class="${parseFloat(h.diff)>=0?'green':'red'}">¥${h.diff}</strong>
+              </div>` : ''}
+              <div class="m-history-pushed">${h.pushed_at ? '✅ 已推送' : '⬜ 未推送'}</div>
+            </div>`).join('')
+        : '<div class="m-empty">暂无历史记录</div>';
+    }
+    init();
+  </script>
+</body>
+</html>

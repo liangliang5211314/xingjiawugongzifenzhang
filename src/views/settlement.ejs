@@ -1,0 +1,159 @@
+<%
+const title = '结算';
+const page  = 'settlement';
+const body = `
+<div class="page-header">
+  <h2>月度结算</h2>
+</div>
+
+<div class="card form-card">
+  <h3>运行结算</h3>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>团队</label>
+      <select id="sTeam"></select>
+    </div>
+    <div class="form-row">
+      <label>月份</label>
+      <input type="month" id="sMonth">
+    </div>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" onclick="runSettle()">🧮 运行结算</button>
+    <button class="btn" onclick="loadSettlements()">📋 查看已有结算</button>
+  </div>
+  <div id="settleErr" class="error-msg" style="display:none"></div>
+</div>
+
+<div id="settleResult" style="display:none" class="card">
+  <div class="settle-header">
+    <div>
+      <h3 id="settleTitle"></h3>
+      <div id="settleCompare" class="compare-bar"></div>
+    </div>
+    <div class="settle-actions">
+      <button class="btn btn-primary" id="btnPush" onclick="pushSettle()">📨 推送微信</button>
+      <button class="btn" id="btnFeishu" onclick="feishuSync()">🔄 同步飞书</button>
+    </div>
+  </div>
+  <div class="stats-grid" id="settleSummary"></div>
+  <h4 style="margin:.75rem 0 .5rem">成员明细</h4>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>姓名</th><th>应收</th><th>实收</th><th>差额</th></tr></thead>
+      <tbody id="settleMemberBody"></tbody>
+    </table>
+  </div>
+  <h4 style="margin:.75rem 0 .5rem">转账路径（最少转账）</h4>
+  <div id="settleTransfers" class="transfers-list"></div>
+</div>
+
+<h3 style="margin:1.5rem 0 .5rem">历史结算记录</h3>
+<div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>月份</th><th>团队</th><th>总收入</th><th>总支出</th><th>去年同月</th><th>前年同月</th><th>推送</th><th>操作</th></tr></thead>
+    <tbody id="settleListBody"><tr><td colspan="8">加载中...</td></tr></tbody>
+  </table>
+</div>
+`;
+const pageScript = `<script>
+let teamsMap = {}, allTeams = [], currentSettlement = null;
+
+async function initPage() {
+  const tr = await api('/api/teams');
+  allTeams = tr ? tr.data || [] : [];
+  teamsMap = Object.fromEntries(allTeams.map(t => [t.id, t.name]));
+  document.getElementById('sTeam').innerHTML = allTeams.map(t =>
+    '<option value="'+t.id+'">'+t.name+'</option>').join('');
+  document.getElementById('sMonth').value = new Date().toISOString().slice(0,7);
+  loadSettlements();
+}
+
+async function runSettle() {
+  const teamId = document.getElementById('sTeam').value;
+  const month  = document.getElementById('sMonth').value;
+  if (!teamId || !month) return alert('请选择团队和月份');
+  const res = await api('/api/settlements/run', { method:'POST', body: JSON.stringify({team_id:Number(teamId),month}) });
+  if (res && res.ok) showSettleResult(res.data);
+}
+
+function showSettleResult(s) {
+  currentSettlement = s;
+  document.getElementById('settleResult').style.display = 'block';
+  document.getElementById('btnPush').dataset.id = s.id;
+  document.getElementById('btnFeishu').dataset.team = s.team_id;
+  document.getElementById('btnFeishu').dataset.month = s.month;
+  const r = s.result_json || {};
+  document.getElementById('settleTitle').textContent = (teamsMap[s.team_id]||s.team_id) + ' · ' + s.month + ' 结算结果';
+  document.getElementById('settleCompare').innerHTML = [
+    s.year_compare_last  != null ? '去年同月: ¥'+(s.year_compare_last/100).toFixed(2) : '',
+    s.year_compare_prev2 != null ? '前年同月: ¥'+(s.year_compare_prev2/100).toFixed(2) : '',
+  ].filter(Boolean).join('　｜　');
+  document.getElementById('settleSummary').innerHTML = [
+    {label:'总收入', value:'¥'+(r.total_income||0)},
+    {label:'总支出', value:'¥'+(r.total_expense||0)},
+    {label:'退税',   value:'¥'+(r.total_tax||0)},
+    {label:'可分配', value:'¥'+(r.distributable||0)},
+  ].map(function(s){return '<div class="stat-card"><div class="stat-label">'+s.label+'</div><div class="stat-value">'+s.value+'</div></div>';}).join('');
+  document.getElementById('settleMemberBody').innerHTML = (r.members||[]).map(function(m) {
+    var cls = parseFloat(m.diff)>0 ? 'text-green' : parseFloat(m.diff)<0 ? 'text-red' : '';
+    return '<tr><td>'+m.name+'</td><td>¥'+m.should_get+'</td><td>¥'+m.actual+'</td><td class="'+cls+'">¥'+m.diff+'</td></tr>';
+  }).join('') || '<tr><td colspan="4">-</td></tr>';
+  document.getElementById('settleTransfers').innerHTML = (r.transfers||[]).length
+    ? (r.transfers||[]).map(t => '💸 <strong>'+t.from+'</strong> 转给 <strong>'+t.to+'</strong>：¥'+t.amount).join('<br>')
+    : '<div class="text-muted">无需转账（已平衡）</div>';
+}
+
+async function pushSettle() {
+  const id = document.getElementById('btnPush').dataset.id;
+  if (!id) return alert('请先运行结算');
+  if (!confirm('确认推送微信通知给所有成员？')) return;
+  const res = await api('/api/settlements/'+id+'/push', { method:'POST' });
+  if (res && res.ok) {
+    const d = res.data;
+    alert('推送完成：成功'+d.pushed+'人，失败'+d.failed+'人，跳过'+d.skipped+'人');
+    loadSettlements();
+  }
+}
+
+async function feishuSync() {
+  const btn = document.getElementById('btnFeishu');
+  const teamId = btn.dataset.team;
+  const month  = btn.dataset.month;
+  const [r1, r2] = await Promise.all([
+    api('/api/feishu/sync-records',    {method:'POST', body:JSON.stringify({team_id:Number(teamId),month})}),
+    api('/api/feishu/sync-settlement', {method:'POST', body:JSON.stringify({team_id:Number(teamId),month})}),
+  ]);
+  if (r1 && r1.ok && r2 && r2.ok) alert('飞书同步成功：台账'+r1.data.synced+'条，结算'+r2.data.synced+'条');
+}
+
+async function loadSettlements() {
+  const res = await api('/api/settlements');
+  const list = res ? res.data || [] : [];
+  document.getElementById('settleListBody').innerHTML = list.map(function(s) {
+    return '<tr>' +
+      '<td>'+s.month+'</td>' +
+      '<td>'+(teamsMap[s.team_id]||s.team_id)+'</td>' +
+      '<td>¥'+(s.total_income/100).toFixed(2)+'</td>' +
+      '<td>¥'+(s.total_expense/100).toFixed(2)+'</td>' +
+      '<td>'+(s.year_compare_last  != null ? '¥'+(s.year_compare_last/100).toFixed(2) : '-')+'</td>' +
+      '<td>'+(s.year_compare_prev2 != null ? '¥'+(s.year_compare_prev2/100).toFixed(2) : '-')+'</td>' +
+      '<td>'+(s.pushed_at ? '✅' : '-')+'</td>' +
+      '<td><button class="btn btn-sm" onclick="viewSettle(this)" data-id="'+s.id+'">查看</button></td>' +
+      '</tr>';
+  }).join('') || '<tr><td colspan="8">暂无结算记录</td></tr>';
+
+  // store settlements for viewSettle lookup
+  window._settlements = list;
+}
+
+function viewSettle(btn) {
+  const id = parseInt(btn.dataset.id);
+  const s = (window._settlements||[]).find(function(x){return x.id===id;});
+  if (s) { showSettleResult(s); document.getElementById('settleResult').scrollIntoView({behavior:'smooth'}); }
+}
+
+initPage();
+</script>`;
+%>
+<%- include('layout', { title, page, body, pageScript }) %>

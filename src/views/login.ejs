@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理员登录 - 团队结算系统</title>
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <h1>团队收益结算系统</h1>
+    <p class="login-sub">管理员登录</p>
+    <form id="loginForm">
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="username" name="username" placeholder="admin" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="password" name="password" placeholder="密码" required>
+      </div>
+      <div id="loginError" class="error-msg" style="display:none"></div>
+      <button type="submit" class="btn btn-primary btn-full" id="loginBtn">登录</button>
+    </form>
+  </div>
+  <script src="/admin.js"></script>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const errEl = document.getElementById('loginError');
+      btn.disabled = true; btn.textContent = '登录中...';
+      errEl.style.display = 'none';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: document.getElementById('username').value, password: document.getElementById('password').value })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          localStorage.setItem('admin_token', data.data.token);
+          location.href = '/admin/dashboard';
+        } else {
+          errEl.textContent = data.message || '登录失败';
+          errEl.style.display = 'block';
+        }
+      } catch(err) {
+        errEl.textContent = '网络错误，请稍后重试';
+        errEl.style.display = 'block';
+      }
+      btn.disabled = false; btn.textContent = '登录';
+    });
+  </script>
+</body>
+</html>

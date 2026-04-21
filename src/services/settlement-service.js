@@ -1,40 +1,67 @@
-const { getTeamById } = require("../models/team-model");
-const { getMembersByTeamId } = require("../models/member-model");
-const { getRecordsByTeamAndMonth } = require("../models/record-model");
-const { getSettlement, saveSettlement } = require("../models/settlement-model");
-const { HttpError } = require("../utils/http-error");
-const { calculateSettlement } = require("../utils/settlement");
+const { getTeamById } = require('../models/team-model');
+const { getRecordsByTeamAndMonth, sumIncomeByTeamMonth, getPersonNames } = require('../models/record-model');
+const { getSettlement, getSettlementById, listSettlements, saveSettlement, markPushed, getMonthTotalIncome } = require('../models/settlement-model');
+const { HttpError } = require('../utils/http-error');
+const { toCents } = require('../utils/money');
+const { calculateSettlement } = require('../utils/settlement');
 
-function settle(teamId, month) {
+// 获取年同比数据（优先从settlements，否则从income_records聚合）
+function fetchYearCompare(teamId, month) {
+  const [year, mon] = month.split('-');
+  const lastYear  = `${Number(year) - 1}-${mon}`;
+  const prev2Year = `${Number(year) - 2}-${mon}`;
+
+  const fromSettlements = (m) => getMonthTotalIncome(teamId, m);
+  const fromRecords = (m) => sumIncomeByTeamMonth(teamId, m);
+
+  const last  = fromSettlements(lastYear)  ?? fromRecords(lastYear);
+  const prev2 = fromSettlements(prev2Year) ?? fromRecords(prev2Year);
+  return { last, prev2 };
+}
+
+function runSettlement(teamId, month) {
   const team = getTeamById(teamId);
-  if (!team) {
-    throw new HttpError(404, "Team not found");
-  }
-
-  const members = getMembersByTeamId(teamId);
-  if (members.length === 0) {
-    throw new HttpError(400, "Team has no members");
-  }
+  if (!team) throw new HttpError(404, '团队不存在');
 
   const records = getRecordsByTeamAndMonth(teamId, month);
-  if (records.length === 0) {
-    throw new HttpError(400, "No records found for the given team and month");
-  }
+  if (records.length === 0) throw new HttpError(400, '该团队该月没有数据，请先录入');
 
-  const result = calculateSettlement(team, members, records);
+  const personNames = [...new Set(records.map(r => r.person_name))];
+  const result = calculateSettlement(team, personNames, records);
   result.month = month;
-  return saveSettlement(teamId, month, result);
+
+  const totalIncomeCents  = records.filter(r => r.item_type === 'income').reduce((s, r) => s + r.amount, 0);
+  const totalExpenseCents = records.filter(r => r.item_type === 'expense').reduce((s, r) => s + Math.abs(r.amount), 0);
+
+  const { last, prev2 } = fetchYearCompare(teamId, month);
+
+  return saveSettlement(teamId, month, {
+    total_income:       totalIncomeCents,
+    total_expense:      totalExpenseCents,
+    year_compare_last:  last  ?? null,
+    year_compare_prev2: prev2 ?? null,
+    result,
+  });
 }
 
 function fetchSettlement(teamId, month) {
-  const result = getSettlement(teamId, month);
-  if (!result) {
-    throw new HttpError(404, "Settlement not found");
-  }
-  return result;
+  const s = getSettlement(teamId, month);
+  if (!s) throw new HttpError(404, '结算记录不存在，请先运行结算');
+  return s;
 }
 
-module.exports = {
-  settle,
-  fetchSettlement
-};
+function fetchSettlementById(id) {
+  const s = getSettlementById(id);
+  if (!s) throw new HttpError(404, '结算记录不存在');
+  return s;
+}
+
+function getSettlements({ teamId, month } = {}) {
+  return listSettlements({ teamId, month });
+}
+
+function markSettlementPushed(id) {
+  return markPushed(id);
+}
+
+module.exports = { runSettlement, fetchSettlement, fetchSettlementById, getSettlements, markSettlementPushed };

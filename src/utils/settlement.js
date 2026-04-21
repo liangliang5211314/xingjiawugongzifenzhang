@@ -1,191 +1,165 @@
-const { fromCents, roundShare } = require("./money");
+const { fromCents, roundShare } = require('./money');
 
-function getSignedRecordAmount(record) {
-  if (record.type === "income") {
-    return record.amount;
-  }
-  if (record.type === "adjust") {
-    return record.amount;
-  }
-  return -Math.abs(record.amount);
-}
-
-function splitEvenly(totalCents, count) {
-  const base = Math.floor(totalCents / count);
-  const remainder = totalCents % count;
-  return Array.from({ length: count }, (_, index) => base + (index < remainder ? 1 : 0));
-}
-
+// 将最少转账路径计算出来（贪心算法）
 function buildTransfers(memberSettlements) {
-  const debtors = [];
+  const debtors   = [];
   const creditors = [];
 
-  memberSettlements.forEach((member) => {
-    if (member.diff_cents < 0) {
-      debtors.push({ member_id: member.member_id, name: member.name, amount: Math.abs(member.diff_cents) });
-    } else if (member.diff_cents > 0) {
-      creditors.push({ member_id: member.member_id, name: member.name, amount: member.diff_cents });
-    }
+  memberSettlements.forEach(m => {
+    if (m.diff_cents < 0) debtors.push({ name: m.name, amount: Math.abs(m.diff_cents) });
+    else if (m.diff_cents > 0) creditors.push({ name: m.name, amount: m.diff_cents });
   });
 
   const transfers = [];
-  let debtorIndex = 0;
-  let creditorIndex = 0;
-
-  while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
-    const debtor = debtors[debtorIndex];
-    const creditor = creditors[creditorIndex];
-    const amount = Math.min(debtor.amount, creditor.amount);
-
-    transfers.push({
-      from_member_id: debtor.member_id,
-      from_name: debtor.name,
-      to_member_id: creditor.member_id,
-      to_name: creditor.name,
-      amount: fromCents(amount)
-    });
-
-    debtor.amount -= amount;
-    creditor.amount -= amount;
-
-    if (debtor.amount === 0) {
-      debtorIndex += 1;
-    }
-    if (creditor.amount === 0) {
-      creditorIndex += 1;
-    }
+  let di = 0, ci = 0;
+  while (di < debtors.length && ci < creditors.length) {
+    const d = debtors[di];
+    const c = creditors[ci];
+    const amount = Math.min(d.amount, c.amount);
+    transfers.push({ from: d.name, to: c.name, amount: fromCents(amount) });
+    d.amount -= amount;
+    c.amount -= amount;
+    if (d.amount === 0) di++;
+    if (c.amount === 0) ci++;
   }
-
   return transfers;
 }
 
-function calculateStandardShouldGet(team, members, distributableCents) {
-  const config = team.rule_config || {};
-  const strategy = config.strategy || "leader-plus-equal";
+function splitEvenly(totalCents, count) {
+  if (count <= 0) return [];
+  const base = Math.floor(totalCents / count);
+  const remainder = totalCents % count;
+  return Array.from({ length: count }, (_, i) => base + (i < remainder ? 1 : 0));
+}
 
-  if (strategy === "fixed-ratios") {
-    const ratios = Array.isArray(config.allocations) ? config.allocations : [];
-    const ratioMap = new Map(ratios.map((item) => [Number(item.member_id), Number(item.ratio || 0)]));
-    const raw = members.map((member) => ({
-      member_id: member.id,
-      amount: roundShare(distributableCents, ratioMap.get(member.id) || 0)
-    }));
-    const assigned = raw.reduce((sum, item) => sum + item.amount, 0);
+// standard规则：leader拿比例，其余平分
+function calcStandard(team, personNames, distributableCents) {
+  const config = team.rule_config || {};
+  const result = new Map();
+
+  // custom分配：rule_config.allocations = [{name, ratio}]
+  if (config.strategy === 'fixed-ratios' || team.rule_type === 'custom') {
+    const allocations = Array.isArray(config.allocations) ? config.allocations : [];
+    const ratioMap = new Map(allocations.map(a => [a.name, Number(a.ratio || 0)]));
+    let assigned = 0;
+    const raw = personNames.map(name => {
+      const share = roundShare(distributableCents, ratioMap.get(name) || 0);
+      assigned += share;
+      return { name, share };
+    });
     const delta = distributableCents - assigned;
-    if (raw.length > 0) {
-      raw[raw.length - 1].amount += delta;
-    }
-    return new Map(raw.map((item) => [item.member_id, item.amount]));
+    if (raw.length > 0) raw[raw.length - 1].share += delta;
+    raw.forEach(({ name, share }) => result.set(name, share));
+    return result;
   }
 
+  // 默认：leader-plus-equal
   const leaderRatio = Number(config.leader_ratio ?? 0.2);
-  const leaderId = config.leader_member_id
-    ? Number(config.leader_member_id)
-    : members.find((member) => member.is_leader)?.id;
-
-  const leaderShare = leaderId ? roundShare(distributableCents, leaderRatio) : 0;
-  const others = members.filter((member) => member.id !== leaderId);
+  const leaderName = config.leader_name || null;
+  const leaderShare = leaderName ? roundShare(distributableCents, leaderRatio) : 0;
+  const others = personNames.filter(n => n !== leaderName);
   const remaining = distributableCents - leaderShare;
-  const equalShares = others.length > 0 ? splitEvenly(remaining, others.length) : [];
-  const result = new Map();
+  const equalShares = splitEvenly(remaining, others.length);
 
-  members.forEach((member) => {
-    if (member.id === leaderId) {
-      result.set(member.id, leaderShare);
-      return;
-    }
-    const index = others.findIndex((item) => item.id === member.id);
-    result.set(member.id, equalShares[index] || 0);
+  personNames.forEach(name => {
+    if (name === leaderName) { result.set(name, leaderShare); return; }
+    result.set(name, equalShares[others.indexOf(name)] || 0);
   });
 
-  if (!leaderId && members.length > 0) {
-    const equalFallback = splitEvenly(distributableCents, members.length);
-    members.forEach((member, index) => result.set(member.id, equalFallback[index]));
+  if (!leaderName && personNames.length > 0) {
+    const fallback = splitEvenly(distributableCents, personNames.length);
+    personNames.forEach((name, i) => result.set(name, fallback[i]));
   }
-
   return result;
 }
 
-function calculateZTeamShouldGet(team, members, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents) {
+// zteam规则：leader = 总收入×ratio + 报销；其余平分剩余
+function calcZteam(team, personNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents) {
   const config = team.rule_config || {};
-  const leaderName = config.leader_member_name || "张明亮";
+  const leaderName = config.leader_name || '张明亮';
   const leaderRatio = Number(config.leader_ratio ?? 0.2);
-  const reimburseExpenses = config.reimburse_expenses !== false;
-  const leader = members.find((member) => member.name === leaderName) || members.find((member) => member.is_leader);
+  const reimburse = config.reimburse_expenses !== false;
   const result = new Map();
 
-  if (!leader) {
-    return calculateStandardShouldGet(team, members, totalIncomeCents - totalTaxCents + totalAdjustCents);
+  const hasLeader = personNames.includes(leaderName);
+  if (!hasLeader) {
+    const dist = totalIncomeCents - totalTaxCents + totalAdjustCents;
+    return calcStandard(team, personNames, dist);
   }
 
-  const others = members.filter((member) => member.id !== leader.id);
+  const others = personNames.filter(n => n !== leaderName);
   const basePool = roundShare(totalIncomeCents, leaderRatio);
-  const leaderShouldGet = basePool + (reimburseExpenses ? totalExpenseCents : 0);
+  const leaderGet = basePool + (reimburse ? totalExpenseCents : 0);
   const otherPool = totalIncomeCents - basePool - totalExpenseCents - totalTaxCents + totalAdjustCents;
-  const otherShares = others.length > 0 ? splitEvenly(otherPool, others.length) : [];
+  const otherShares = splitEvenly(otherPool, others.length);
 
-  result.set(leader.id, leaderShouldGet);
-  others.forEach((member, index) => {
-    result.set(member.id, otherShares[index] || 0);
-  });
-
+  result.set(leaderName, leaderGet);
+  others.forEach((name, i) => result.set(name, otherShares[i] || 0));
   return result;
 }
 
-function calculateSettlement(team, members, records) {
-  const totalIncomeCents = records.filter((item) => item.type === "income").reduce((sum, item) => sum + item.amount, 0);
-  const totalTaxCents = records.filter((item) => item.type === "tax").reduce((sum, item) => sum + item.amount, 0);
-  const totalExpenseCents = records.filter((item) => item.type === "expense").reduce((sum, item) => sum + item.amount, 0);
-  const totalAdjustCents = records.filter((item) => item.type === "adjust").reduce((sum, item) => sum + item.amount, 0);
+/**
+ * 核心结算函数
+ * @param {object} team - { id, name, rule_type, rule_config }
+ * @param {string[]} personNames - 参与分账的成员姓名数组
+ * @param {object[]} records - income_records 行，字段: person_name, item_type, amount
+ * @returns {object} 结算结果
+ */
+function calculateSettlement(team, personNames, records) {
+  const sum = (type) => records.filter(r => r.item_type === type).reduce((s, r) => s + r.amount, 0);
+
+  const totalIncomeCents  = sum('income');
+  const totalTaxCents     = sum('tax');
+  const totalExpenseCents = Math.abs(sum('expense')); // 支出存为负数或正数均兼容
+  const totalAdjustCents  = sum('adjust');
   const distributableCents = totalIncomeCents - totalTaxCents - totalExpenseCents + totalAdjustCents;
 
   let shouldGetMap;
-  if (team.rule_type === "zteam") {
-    shouldGetMap = calculateZTeamShouldGet(
-      team,
-      members,
-      totalIncomeCents,
-      totalTaxCents,
-      totalExpenseCents,
-      totalAdjustCents
-    );
+  if (team.rule_type === 'zteam') {
+    // zteam: should_get 里已含 leader 报销；sum(should_get) = income - tax + adjust
+    shouldGetMap = calcZteam(team, personNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents);
   } else {
-    shouldGetMap = calculateStandardShouldGet(team, members, distributableCents);
+    // standard/custom: distributable 已扣除 expense；再逐条把 expense 还给实际垫付人
+    shouldGetMap = calcStandard(team, personNames, distributableCents);
+    records.filter(r => r.item_type === 'expense').forEach(r => {
+      const amt = Math.abs(r.amount);
+      shouldGetMap.set(r.person_name, (shouldGetMap.get(r.person_name) || 0) + amt);
+    });
   }
 
-  const actualMap = new Map(members.map((member) => [member.id, 0]));
-  records.forEach((record) => {
-    actualMap.set(record.member_id, (actualMap.get(record.member_id) || 0) + getSignedRecordAmount(record));
+  // actual = 每人实收金额（income+、tax-、adjust±；expense不计入actual，通过should_get报销）
+  // 这样 sum(actual) = sum(should_get) 保证账面平衡
+  const actualMap = new Map(personNames.map(n => [n, 0]));
+  records.forEach(r => {
+    if (r.item_type === 'expense') return; // expense 不进 actual
+    const sign = (r.item_type === 'income' || r.item_type === 'adjust') ? 1 : -1;
+    actualMap.set(r.person_name, (actualMap.get(r.person_name) || 0) + sign * Math.abs(r.amount));
   });
 
-  const memberSettlements = members.map((member) => {
-    const shouldGet = shouldGetMap.get(member.id) || 0;
-    const actual = actualMap.get(member.id) || 0;
-    const diff = shouldGet - actual;
+  const memberSettlements = personNames.map(name => {
+    const shouldGet = shouldGetMap.get(name) || 0;
+    const actual    = actualMap.get(name) || 0;
+    const diff      = shouldGet - actual;
     return {
-      member_id: member.id,
-      name: member.name,
-      should_get: fromCents(shouldGet),
-      actual: fromCents(actual),
-      diff: fromCents(diff),
-      should_get_cents: shouldGet,
-      actual_cents: actual,
-      diff_cents: diff
+      name,
+      should_get:       fromCents(shouldGet),
+      actual:           fromCents(actual),
+      diff:             fromCents(diff),
+      diff_cents:       diff,
     };
   });
 
   return {
-    team_id: team.id,
-    team_name: team.name,
-    month: records[0]?.month || null,
-    rule_type: team.rule_type,
-    total_income: fromCents(totalIncomeCents),
-    total_tax: fromCents(totalTaxCents),
+    team_id:       team.id,
+    team_name:     team.name,
+    rule_type:     team.rule_type,
+    total_income:  fromCents(totalIncomeCents),
+    total_tax:     fromCents(totalTaxCents),
     total_expense: fromCents(totalExpenseCents),
-    total_adjust: fromCents(totalAdjustCents),
+    total_adjust:  fromCents(totalAdjustCents),
     distributable: fromCents(distributableCents),
-    members: memberSettlements.map(({ should_get_cents, actual_cents, diff_cents, ...rest }) => rest),
-    transfers: buildTransfers(memberSettlements)
+    members:       memberSettlements.map(({ diff_cents, ...rest }) => rest),
+    transfers:     buildTransfers(memberSettlements),
   };
 }
 

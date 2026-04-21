@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title || '团队结算系统' %></title>
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span class="logo">💰 结算系统</span>
+        <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+      </div>
+      <ul class="nav-links">
+        <li><a href="/admin/dashboard" class="<%= page==='dashboard'?'active':'' %>">📊 仪表盘</a></li>
+        <li><a href="/admin/teams"     class="<%= page==='teams'?'active':'' %>">🏢 团队管理</a></li>
+        <li><a href="/admin/users"     class="<%= page==='users'?'active':'' %>">👥 成员管理</a></li>
+        <li><a href="/admin/records"   class="<%= page==='records'?'active':'' %>">📝 数据录入</a></li>
+        <li><a href="/admin/settlement" class="<%= page==='settlement'?'active':'' %>">🧮 结算</a></li>
+        <li><a href="/admin/push-logs" class="<%= page==='pushlogs'?'active':'' %>">📨 推送日志</a></li>
+      </ul>
+      <div class="sidebar-footer">
+        <button onclick="logout()" class="btn-logout">退出登录</button>
+      </div>
+    </nav>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    <main class="main-content">
+      <div class="topbar">
+        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+        <span class="topbar-title"><%= title || '团队结算系统' %></span>
+      </div>
+      <div class="content-body">
+        <%- body %>
+      </div>
+    </main>
+  </div>
+  <script src="/admin.js"></script>
+  <%- pageScript || '' %>
+</body>
+</html>

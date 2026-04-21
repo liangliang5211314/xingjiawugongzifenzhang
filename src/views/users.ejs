@@ -1,0 +1,117 @@
+<%
+const title = '成员管理';
+const page  = 'users';
+const body = `
+<div class="page-header">
+  <h2>成员管理</h2>
+  <button class="btn btn-primary" onclick="showUserForm()">+ 新建成员</button>
+</div>
+
+<div id="userFormWrap" style="display:none" class="card form-card">
+  <h3 id="userFormTitle">新建成员</h3>
+  <form id="userForm">
+    <input type="hidden" id="userId">
+    <div class="form-row">
+      <label>姓名 * <small>（需与录入数据中的姓名完全一致）</small></label>
+      <input type="text" id="uName" required placeholder="如：张明亮">
+    </div>
+    <div class="form-row">
+      <label>手机号</label>
+      <input type="text" id="uMobile" placeholder="13800000000">
+    </div>
+    <div class="form-row">
+      <label>所属团队</label>
+      <select id="uTeam"><option value="">-- 不绑定团队 --</option></select>
+    </div>
+    <div class="form-row">
+      <label>角色</label>
+      <select id="uRole">
+        <option value="member">member（成员）</option>
+        <option value="admin">admin（管理员）</option>
+      </select>
+    </div>
+    <div class="form-row" id="usernameRow">
+      <label>登录用户名 <small>（管理员必填）</small></label>
+      <input type="text" id="uUsername" placeholder="admin2">
+    </div>
+    <div class="form-row" id="passwordRow">
+      <label>登录密码 <small>（留空则不改密码）</small></label>
+      <input type="password" id="uPassword" placeholder="新密码">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">保存</button>
+      <button type="button" class="btn" onclick="hideUserForm()">取消</button>
+    </div>
+    <div id="userFormErr" class="error-msg" style="display:none"></div>
+  </form>
+</div>
+
+<div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>ID</th><th>姓名</th><th>手机</th><th>角色</th><th>所属团队</th><th>微信绑定</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody id="userListBody"><tr><td colspan="8">加载中...</td></tr></tbody>
+  </table>
+</div>
+`;
+const pageScript = `<script>
+let users = [], teamsMap = {};
+
+async function loadAll() {
+  const [ur, tr] = await Promise.all([api('/api/users'), api('/api/teams')]);
+  if (!ur || !tr) return;
+  users = ur.data || [];
+  teamsMap = Object.fromEntries((tr.data||[]).map(t => [t.id, t.name]));
+  const sel = document.getElementById('uTeam');
+  sel.innerHTML = '<option value="">-- 不绑定团队 --</option>' +
+    (tr.data||[]).map(t => '<option value="'+t.id+'">'+t.name+'</option>').join('');
+  document.getElementById('userListBody').innerHTML = users.map(u =>
+    '<tr>' +
+    '<td>'+u.id+'</td>' +
+    '<td><strong>'+(u.name||'-')+'</strong></td>' +
+    '<td>'+(u.mobile||'-')+'</td>' +
+    '<td><span class="badge">'+u.role+'</span></td>' +
+    '<td>'+(u.team_id ? teamsMap[u.team_id]||u.team_id : '-')+'</td>' +
+    '<td>'+(u.openid ? '✅已绑定' : '⬜未绑定')+'</td>' +
+    '<td>'+(u.status ? '正常' : '停用')+'</td>' +
+    '<td><button class="btn btn-sm" onclick="editUser('+u.id+')">编辑</button></td>' +
+    '</tr>'
+  ).join('') || '<tr><td colspan="8">暂无成员</td></tr>';
+}
+
+function showUserForm(user) {
+  document.getElementById('userFormWrap').style.display = 'block';
+  document.getElementById('userFormTitle').textContent = user ? '编辑成员' : '新建成员';
+  document.getElementById('userId').value = user ? user.id : '';
+  document.getElementById('uName').value = user ? user.name||'' : '';
+  document.getElementById('uMobile').value = user ? user.mobile||'' : '';
+  document.getElementById('uTeam').value = user ? user.team_id||'' : '';
+  document.getElementById('uRole').value = user ? user.role : 'member';
+  document.getElementById('uUsername').value = user ? user.username||'' : '';
+  document.getElementById('uPassword').value = '';
+  document.getElementById('userFormErr').style.display = 'none';
+}
+function hideUserForm() { document.getElementById('userFormWrap').style.display = 'none'; }
+function editUser(id) { showUserForm(users.find(u => u.id === id)); }
+
+document.getElementById('userForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const id = document.getElementById('userId').value;
+  const body = {
+    name: document.getElementById('uName').value,
+    mobile: document.getElementById('uMobile').value,
+    team_id: document.getElementById('uTeam').value || null,
+    role: document.getElementById('uRole').value,
+    username: document.getElementById('uUsername').value || null,
+  };
+  const pwd = document.getElementById('uPassword').value;
+  if (pwd) body.password = pwd;
+  const res = await api(id ? '/api/users/'+id : '/api/users', {
+    method: id ? 'PUT' : 'POST', body: JSON.stringify(body)
+  });
+  if (res && res.ok) { hideUserForm(); loadAll(); }
+});
+
+loadAll();
+</script>`;
+%>
+<%- include('layout', { title, page, body, pageScript }) %>

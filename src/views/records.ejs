@@ -1,0 +1,179 @@
+<%
+const title = '数据录入';
+const page  = 'records';
+const body = `
+<div class="page-header">
+  <h2>数据录入</h2>
+  <button class="btn btn-primary" onclick="showRecordForm()">+ 新增记录</button>
+</div>
+
+<div class="filter-bar">
+  <select id="filterTeam" onchange="loadRecords()">
+    <option value="">全部团队</option>
+  </select>
+  <input type="month" id="filterMonth" onchange="loadRecords()" placeholder="筛选月份">
+  <button class="btn" onclick="loadRecords()">刷新</button>
+</div>
+
+<div id="recordFormWrap" style="display:none" class="card form-card">
+  <h3 id="rFormTitle">新增记录</h3>
+  <form id="recordForm">
+    <input type="hidden" id="rId">
+    <div class="form-grid">
+      <div class="form-row">
+        <label>团队 *</label>
+        <select id="rTeam" onchange="loadNameSuggestions()" required></select>
+      </div>
+      <div class="form-row">
+        <label>月份 * <small>（支持历史月份）</small></label>
+        <input type="month" id="rMonth" required>
+      </div>
+      <div class="form-row">
+        <label>成员姓名 * <small>（与成员管理中的姓名一致）</small></label>
+        <input type="text" id="rName" list="nameSuggestions" required placeholder="张明亮">
+        <datalist id="nameSuggestions"></datalist>
+      </div>
+      <div class="form-row">
+        <label>类型 *</label>
+        <select id="rItemType" onchange="onItemTypeChange()">
+          <option value="income">收入 (income)</option>
+          <option value="tax">退税 (tax)</option>
+          <option value="expense">支出 (expense)</option>
+          <option value="adjust">调整 (adjust)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>项目名称</label>
+        <input type="text" id="rItemName" placeholder="如：A收益、软件费">
+      </div>
+      <div class="form-row">
+        <label>金额（元）* <small>（支出填正数，系统自动处理）</small></label>
+        <input type="number" id="rAmount" step="0.01" min="0" required placeholder="0.00">
+      </div>
+      <div class="form-row" id="payerRow" style="display:none">
+        <label>支出垫付人</label>
+        <input type="text" id="rPayer" list="nameSuggestions" placeholder="谁垫付的">
+      </div>
+      <div class="form-row" style="grid-column:1/-1">
+        <label>备注</label>
+        <input type="text" id="rNote" placeholder="可选备注">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">保存</button>
+      <button type="button" class="btn" onclick="hideRecordForm()">取消</button>
+    </div>
+    <div id="rFormErr" class="error-msg" style="display:none"></div>
+  </form>
+</div>
+
+<div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>月份</th><th>团队</th><th>姓名</th><th>类型</th><th>项目名</th><th>金额</th><th>垫付人</th><th>备注</th><th>操作</th></tr></thead>
+    <tbody id="recordBody"><tr><td colspan="9">请选择筛选条件后加载</td></tr></tbody>
+  </table>
+</div>
+`;
+const pageScript = `<script>
+let records = [], teamsMap = {}, allTeams = [];
+const ITEM_NAMES = { income:'收入', tax:'退税', expense:'支出', adjust:'调整' };
+
+async function initPage() {
+  const tr = await api('/api/teams');
+  allTeams = tr ? tr.data || [] : [];
+  teamsMap = Object.fromEntries(allTeams.map(t => [t.id, t.name]));
+  ['filterTeam','rTeam'].forEach(function(id) {
+    const el = document.getElementById(id);
+    const opt = allTeams.map(t => '<option value="'+t.id+'">'+t.name+'</option>').join('');
+    if (id==='filterTeam') el.innerHTML = '<option value="">全部团队</option>' + opt;
+    else el.innerHTML = '<option value="">选择团队</option>' + opt;
+  });
+  document.getElementById('rMonth').value = new Date().toISOString().slice(0,7);
+}
+
+async function loadRecords() {
+  const teamId = document.getElementById('filterTeam').value;
+  const month  = document.getElementById('filterMonth').value;
+  const qs = new URLSearchParams();
+  if (teamId) qs.set('team_id', teamId);
+  if (month)  qs.set('month', month);
+  const res = await api('/api/records?' + qs.toString());
+  records = res ? res.data || [] : [];
+  document.getElementById('recordBody').innerHTML = records.map(function(r) {
+    return '<tr>' +
+      '<td>'+r.month+'</td>' +
+      '<td>'+(teamsMap[r.team_id]||r.team_id)+'</td>' +
+      '<td>'+r.person_name+'</td>' +
+      '<td><span class="badge badge-'+r.item_type+'">'+(ITEM_NAMES[r.item_type]||r.item_type)+'</span></td>' +
+      '<td>'+(r.item_name||'-')+'</td>' +
+      '<td class="'+(r.item_type==='expense'?'text-red':'text-green')+'">¥'+r.amount+'</td>' +
+      '<td>'+(r.payer_name||'-')+'</td>' +
+      '<td>'+(r.note||'-')+'</td>' +
+      '<td>' +
+        '<button class="btn btn-sm" onclick="editRecord('+r.id+')">编辑</button> ' +
+        '<button class="btn btn-sm btn-danger" onclick="delRecord('+r.id+')">删除</button>' +
+      '</td>' +
+      '</tr>';
+  }).join('') || '<tr><td colspan="9">暂无记录</td></tr>';
+}
+
+async function loadNameSuggestions() {
+  const teamId = document.getElementById('rTeam').value;
+  if (!teamId) return;
+  const res = await api('/api/users?team_id='+teamId+'&role=member');
+  const names = res ? (res.data||[]).map(function(u){return u.name;}).filter(Boolean) : [];
+  document.getElementById('nameSuggestions').innerHTML = names.map(n => '<option value="'+n+'">').join('');
+}
+
+function onItemTypeChange() {
+  const type = document.getElementById('rItemType').value;
+  document.getElementById('payerRow').style.display = type==='expense' ? 'block' : 'none';
+}
+
+function showRecordForm(r) {
+  document.getElementById('recordFormWrap').style.display = 'block';
+  document.getElementById('rFormTitle').textContent = r ? '编辑记录' : '新增记录';
+  document.getElementById('rId').value = r ? r.id : '';
+  document.getElementById('rTeam').value = r ? r.team_id : (allTeams[0] ? allTeams[0].id : '');
+  document.getElementById('rMonth').value = r ? r.month : new Date().toISOString().slice(0,7);
+  document.getElementById('rName').value = r ? r.person_name : '';
+  document.getElementById('rItemType').value = r ? r.item_type : 'income';
+  document.getElementById('rItemName').value = r ? r.item_name||'' : '';
+  document.getElementById('rAmount').value = r ? Math.abs(r.amount) : '';
+  document.getElementById('rPayer').value = r ? r.payer_name||'' : '';
+  document.getElementById('rNote').value = r ? r.note||'' : '';
+  onItemTypeChange();
+  if (r && r.team_id) loadNameSuggestions();
+}
+function hideRecordForm() { document.getElementById('recordFormWrap').style.display = 'none'; }
+function editRecord(id) { showRecordForm(records.find(r => r.id===id)); }
+
+async function delRecord(id) {
+  if (!confirm('确认删除此记录？')) return;
+  await api('/api/records/'+id, { method:'DELETE' });
+  loadRecords();
+}
+
+document.getElementById('recordForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const id = document.getElementById('rId').value;
+  const body = {
+    team_id: Number(document.getElementById('rTeam').value),
+    month: document.getElementById('rMonth').value,
+    person_name: document.getElementById('rName').value,
+    item_type: document.getElementById('rItemType').value,
+    item_name: document.getElementById('rItemName').value,
+    amount: parseFloat(document.getElementById('rAmount').value),
+    payer_name: document.getElementById('rPayer').value,
+    note: document.getElementById('rNote').value,
+  };
+  const res = await api(id ? '/api/records/'+id : '/api/records', {
+    method: id ? 'PUT' : 'POST', body: JSON.stringify(body)
+  });
+  if (res && res.ok) { hideRecordForm(); loadRecords(); }
+});
+
+initPage();
+</script>`;
+%>
+<%- include('layout', { title, page, body, pageScript }) %>

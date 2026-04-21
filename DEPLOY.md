@@ -1,177 +1,154 @@
-# 服务器部署说明
+# 部署文档 — 团队收益结算系统
 
-适用于没有 Docker 的 Linux 服务器，推荐使用：
+目标环境：Ubuntu 20.04/22.04 + Node.js 20 + PM2 + Nginx
 
-- Node.js 20
-- PM2
-- Nginx
+---
 
-## 1. 安装 Node.js
-
-推荐 Node.js 20。
-
-Ubuntu 示例：
+## 一、安装 Node.js 20
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-node -v
-npm -v
+sudo apt install -y nodejs
+node -v   # 应显示 v20.x.x
 ```
 
-## 2. 上传项目到服务器
+---
 
-把整个项目上传到例如：
+## 二、部署代码
 
 ```bash
-/var/www/team-settlement-system
-```
-
-进入项目目录：
-
-```bash
-cd /var/www/team-settlement-system
-```
-
-## 3. 安装依赖
-
-```bash
-npm install
-```
-
-## 4. 配置环境变量
-
-复制环境文件：
-
-```bash
-cp .env.example .env
-```
-
-编辑 `.env`，建议至少设置：
-
-```env
-PORT=3000
-JWT_SECRET=please-change-this-secret
-DB_PATH=/var/www/team-settlement-system/data/app.db
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123456
-```
-
-确保数据目录存在：
-
-```bash
+cd /www/wwwroot
+git clone <your-repo-url> xingjiawugongzi
+cd xingjiawugongzi
+npm install --omit=dev
 mkdir -p data
 ```
 
-## 5. 初始化数据库
+---
+
+## 三、配置环境变量
 
 ```bash
-node src/database/init.js
+cp .env.example .env
+nano .env
 ```
 
-## 6. 启动服务
+关键项说明：
+- `JWT_SECRET`：随机长字符串，如 `openssl rand -hex 32`
+- `DB_PATH`：建议绝对路径，如 `/www/wwwroot/xingjiawugongzi/data/app.db`
+- `WX_REDIRECT_URI`：必须与微信公众号后台网页授权域名完全一致
+- `BASE_URL`：系统对外域名，如 `https://settle.example.com`
 
-### 方式 A：直接启动
+---
+
+## 四、初始化数据库
 
 ```bash
-npm start
+npm run db:init
+# 输出：已创建管理员账号: admin
+#       数据库初始化完成。
 ```
 
-### 方式 B：使用 PM2，推荐
+> 如已有旧数据库，会自动备份为 `app.db.backup-<timestamp>`
 
-先安装 PM2：
+---
 
-```bash
-sudo npm install -g pm2
-```
-
-启动应用：
+## 五、配置 PM2
 
 ```bash
+npm install -g pm2
 pm2 start ecosystem.config.js
-pm2 save
 pm2 startup
+pm2 save
+pm2 list
 ```
 
-查看状态：
+---
 
-```bash
-pm2 status
-pm2 logs team-settlement-system
-```
-
-## 7. 配置 Nginx
-
-项目已提供示例配置：
-
-- `deploy/nginx.conf`
-
-把它复制到：
-
-```bash
-/etc/nginx/sites-available/team-settlement-system
-```
-
-然后修改：
+## 六、配置 Nginx
 
 ```nginx
-server_name your-domain.com;
+server {
+    listen 80;
+    server_name settle.example.com;
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
 
-启用站点：
+---
+
+## 七、配置 HTTPS
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/team-settlement-system /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d settle.example.com
+sudo certbot renew --dry-run
 ```
 
-如果没有域名，也可以先用服务器 IP 访问。
+---
 
-## 8. 开放端口
+## 八、微信公众号配置
 
-如果服务器开启了防火墙，放行：
+1. 微信公众平台 → 设置与开发 → 基本配置 → 获取 AppID/AppSecret
+2. 功能设置 → 网页授权域名 → 填入裸域名（如 `settle.example.com`）
+3. 模板消息 → 选择/申请模板 → 获取模板ID → 填入 `WX_TEMPLATE_ID`
+   - 建议模板字段：first、keyword1（月份）、keyword2（总收入）、keyword3（应收）、keyword4（差额）、remark
+
+---
+
+## 九、飞书配置
+
+1. 飞书开放平台 → 创建企业自建应用 → 开通「电子表格」读写权限
+2. 获取 App ID/Secret → 填入 `.env`
+3. 创建飞书电子表格 → 获取 URL 中的 `spreadsheet_token`
+4. 创建两个 Sheet → 分别获取 Sheet ID → 填入 `FEISHU_RECORDS_SHEET_ID`/`FEISHU_SETTLEMENTS_SHEET_ID`
+5. 在表格内给应用授予编辑权限
+
+---
+
+## 十、SQLite 备份
 
 ```bash
-sudo ufw allow 80
-sudo ufw allow 443
+# 手动备份
+cp data/app.db data/app.db.$(date +%Y%m%d)
+
+# crontab 每日自动备份
+crontab -e
+0 2 * * * cp /www/wwwroot/xingjiawugongzi/data/app.db /backup/settle-$(date +\%Y\%m\%d).db
 ```
 
-如果你暂时不配 Nginx，也至少放行 Node 端口：
+---
 
-```bash
-sudo ufw allow 3000
-```
+## 十一、补录历史数据
 
-## 9. HTTPS
+1. 登录后台 → 数据录入页
+2. 选择团队，**月份选历史月份**（如 2024-03）
+3. 逐条录入 income / tax / expense / adjust
+4. 录完 → 结算页 → 选该团队+月份 → 运行结算
+5. 结算自动计算年同比（2024-03 会查 2023-03 和 2022-03）
 
-有域名后推荐使用 Certbot：
+---
 
-```bash
-sudo apt-get install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
-```
+## 十二、重新结算 & 重新推送
 
-## 10. 访问方式
+1. 结算页选择团队+月份 → 运行结算（覆盖原记录）
+2. 结算后点「推送微信」→ 仅绑定 openid 的成员会收到推送
+3. 推送结果在「推送日志」页查看
 
-### 不经过 Nginx
+---
 
-```text
-http://服务器IP:3000
-```
+## 十三、常见问题
 
-### 经过 Nginx
-
-```text
-http://你的域名
-```
-
-## 11. 更新发布
-
-以后更新代码后：
-
-```bash
-cd /var/www/team-settlement-system
-npm install
-pm2 restart team-settlement-system
-```
+| 问题 | 排查 |
+|------|------|
+| 微信授权失败 | 检查 `WX_REDIRECT_URI` 与微信后台配置是否完全一致 |
+| 飞书同步失败 | 检查应用权限、spreadsheet_token、sheet_id |
+| 成员看不到收益 | `users.name` 与 `income_records.person_name` 必须完全一致（含空格） |
+| 推动后无消息 | 检查成员是否绑定 openid；检查 `WX_TEMPLATE_ID` 是否正确 |
+| 重启后数据丢失 | 确认 `DB_PATH` 绝对路径正确；检查 `data/` 目录写权限 |

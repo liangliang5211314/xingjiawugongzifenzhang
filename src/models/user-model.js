@@ -1,114 +1,60 @@
-const { db } = require("../config/database");
+const { db } = require('../config/database');
 
-function getUserByUsername(username) {
-  return db.prepare("SELECT * FROM users WHERE username = ?").get(username);
+function findByUsername(username) {
+  return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 }
 
-function getUserById(id) {
-  return db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+function findById(id) {
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 }
 
-function getUserByWxOpenId(openid) {
-  return db
-    .prepare("SELECT * FROM users WHERE wx_openid = ? OR wechat_openid = ?")
-    .get(openid, openid);
+function findByOpenid(openid) {
+  return db.prepare('SELECT * FROM users WHERE openid = ?').get(openid);
 }
 
-function createUser({
-  username,
-  password,
-  role,
-  team_id,
-  uid = null,
-  phone = "",
-  nickname = "",
-  bio = "",
-  region = "",
-  status = "normal",
-  avatar_url = "",
-  wx_openid = null,
-  wechat_openid = null,
-  wechat_unionid = null,
-  last_login = null
-}) {
-  const result = db
-    .prepare(
-      `
-      INSERT INTO users (
-        username, password, role, team_id, uid, phone, nickname, bio, region, status,
-        avatar_url, wx_openid, wechat_openid, wechat_unionid, last_login
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-    )
-    .run(
-      username,
-      password,
-      role,
-      team_id || null,
-      uid,
-      phone,
-      nickname,
-      bio,
-      region,
-      status,
-      avatar_url,
-      wx_openid,
-      wechat_openid,
-      wechat_unionid,
-      last_login
-    );
-  return getUserById(result.lastInsertRowid);
+function listUsers({ teamId, role } = {}) {
+  let sql = 'SELECT id,name,mobile,username,role,openid,team_id,status,created_at,updated_at FROM users WHERE 1=1';
+  const params = [];
+  if (teamId) { sql += ' AND team_id = ?'; params.push(teamId); }
+  if (role)   { sql += ' AND role = ?';    params.push(role); }
+  sql += ' ORDER BY id ASC';
+  return db.prepare(sql).all(...params);
 }
 
-function addUserToTeams(userId, teamIds) {
-  const insert = db.prepare("INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)");
-  teamIds.forEach((teamId) => insert.run(userId, teamId));
-}
-
-function getUserTeamIds(userId) {
-  return db
-    .prepare("SELECT team_id FROM user_teams WHERE user_id = ? ORDER BY team_id ASC")
-    .all(userId)
-    .map((row) => row.team_id);
-}
-
-function updateUserWechatProfile(userId, payload) {
-  db.prepare(
-    `
-    UPDATE users
-    SET nickname = ?,
-        avatar_url = ?,
-        region = ?,
-        wx_openid = ?,
-        wechat_openid = ?,
-        wechat_unionid = ?,
-        last_login = ?
-    WHERE id = ?
-    `
-  ).run(
-    payload.nickname || "",
-    payload.avatar_url || "",
-    payload.region || "",
-    payload.wx_openid || null,
-    payload.wechat_openid || null,
-    payload.wechat_unionid || null,
-    payload.last_login || null,
-    userId
+function createUser({ name, mobile, username, password_hash, role, openid, unionid, team_id }) {
+  const info = db.prepare(`
+    INSERT INTO users (name, mobile, username, password_hash, role, openid, unionid, team_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    name || null, mobile || null, username || null, password_hash || null,
+    role || 'member', openid || null, unionid || null, team_id || null
   );
-  return getUserById(userId);
+  return findById(info.lastInsertRowid);
 }
 
-function touchLastLogin(userId, lastLogin) {
-  db.prepare("UPDATE users SET last_login = ? WHERE id = ?").run(lastLogin, userId);
+function updateUser(id, fields) {
+  const allowed = ['name', 'mobile', 'username', 'password_hash', 'role', 'openid', 'unionid', 'team_id', 'status'];
+  const sets = [];
+  const vals = [];
+  for (const [k, v] of Object.entries(fields)) {
+    if (allowed.includes(k)) { sets.push(`${k} = ?`); vals.push(v); }
+  }
+  if (!sets.length) return findById(id);
+  sets.push('updated_at = CURRENT_TIMESTAMP');
+  vals.push(id);
+  db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  return findById(id);
 }
 
-module.exports = {
-  getUserByUsername,
-  getUserById,
-  getUserByWxOpenId,
-  createUser,
-  addUserToTeams,
-  getUserTeamIds,
-  updateUserWechatProfile,
-  touchLastLogin
-};
+// 微信登录：找到或创建member用户
+function upsertWechatUser({ openid, unionid, name }) {
+  let user = findByOpenid(openid);
+  if (user) {
+    updateUser(user.id, { name: name || user.name, unionid: unionid || user.unionid });
+    return { user: findById(user.id), isNew: false };
+  }
+  user = createUser({ name: name || '', openid, unionid, role: 'member' });
+  return { user, isNew: true };
+}
+
+module.exports = { findByUsername, findById, findByOpenid, listUsers, createUser, updateUser, upsertWechatUser };

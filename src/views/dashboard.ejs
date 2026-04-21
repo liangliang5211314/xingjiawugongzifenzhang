@@ -1,0 +1,36 @@
+<%
+const title = '仪表盘';
+const page  = 'dashboard';
+const body = `
+<div id="dashContent">
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card loading">加载中...</div>
+  </div>
+  <h3 style="margin:1.5rem 0 .75rem">各团队本月收入</h3>
+  <div class="table-wrap">
+    <table id="teamTable" class="data-table">
+      <thead><tr><th>团队</th><th>本月收入</th></tr></thead>
+      <tbody id="teamBody"><tr><td colspan="2">加载中...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+`;
+const pageScript = `<script>
+(async function() {
+  const data = await api('/api/dashboard');
+  if (!data) return;
+  const d = data.data;
+  document.getElementById('statsGrid').innerHTML = [
+    { label:'本月总收入', value:'¥'+d.this_month_income },
+    { label:'上月总收入', value:'¥'+d.last_month_income },
+    { label:'今年总收入', value:'¥'+d.this_year_income },
+    { label:'去年总收入', value:'¥'+d.last_year_income },
+    { label:'团队数量',   value: d.team_count + ' 个' },
+  ].map(s => '<div class="stat-card"><div class="stat-label">'+s.label+'</div><div class="stat-value">'+s.value+'</div></div>').join('');
+  document.getElementById('teamBody').innerHTML = (d.team_overview||[]).map(t =>
+    '<tr><td>'+t.name+'</td><td>¥'+t.this_month_income+'</td></tr>'
+  ).join('') || '<tr><td colspan="2">暂无数据</td></tr>';
+})();
+</script>`;
+%>
+<%- include('layout', { title, page, body, pageScript }) %>

@@ -1,31 +1,18 @@
-const { createTeamWithOptionalUser, listTeams, updateExistingTeam } = require("../services/team-service");
+const { listTeams, createNewTeam, updateExistingTeam } = require('../services/team-service');
 
 function listTeamsController(req, res, next) {
-  try {
-    res.json(listTeams(req.user));
-  } catch (error) {
-    next(error);
-  }
+  try { res.json({ ok: true, data: listTeams() }); }
+  catch (e) { next(e); }
 }
 
 function createTeamController(req, res, next) {
-  try {
-    res.status(201).json(createTeamWithOptionalUser(req.body));
-  } catch (error) {
-    next(error);
-  }
+  try { res.status(201).json({ ok: true, data: createNewTeam(req.body) }); }
+  catch (e) { next(e); }
 }
 
 function updateTeamController(req, res, next) {
-  try {
-    res.json(updateExistingTeam(Number(req.params.id), req.body));
-  } catch (error) {
-    next(error);
-  }
+  try { res.json({ ok: true, data: updateExistingTeam(Number(req.params.id), req.body) }); }
+  catch (e) { next(e); }
 }
 
-module.exports = {
-  listTeamsController,
-  createTeamController,
-  updateTeamController
-};
+module.exports = { listTeamsController, createTeamController, updateTeamController };

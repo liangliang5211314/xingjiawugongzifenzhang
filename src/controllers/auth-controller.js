@@ -1,32 +1,34 @@
-const { getProfile, login, loginWithWechat } = require("../services/auth-service");
+const { login, loginWithWechat, buildWechatAuthorizeUrl, safeUser } = require('../services/auth-service');
+const { findById } = require('../models/user-model');
+const { getTeamById } = require('../models/team-model');
 
 function loginController(req, res, next) {
   try {
     const result = login(req.body.username, req.body.password);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
+    res.json({ ok: true, data: result });
+  } catch (e) { next(e); }
 }
 
 function meController(req, res, next) {
   try {
-    res.json(getProfile(req.user));
-  } catch (error) {
-    next(error);
-  }
+    const user = findById(req.user.id);
+    const team = user.team_id ? getTeamById(user.team_id) : null;
+    res.json({ ok: true, data: { user: safeUser(user), team } });
+  } catch (e) { next(e); }
 }
 
-async function wechatOauthController(req, res, next) {
+function wechatStartController(req, res) {
+  const url = buildWechatAuthorizeUrl();
+  if (!url) return res.status(500).json({ ok: false, message: '微信OAuth未配置' });
+  res.redirect(url);
+}
+
+async function wechatCallbackController(req, res, next) {
   try {
-    res.json(await loginWithWechat(req.body.code));
-  } catch (error) {
-    next(error);
-  }
+    const { code } = req.query;
+    const { token } = await loginWithWechat(code);
+    res.redirect(`/h5/home#token=${token}`);
+  } catch (e) { next(e); }
 }
 
-module.exports = {
-  loginController,
-  meController,
-  wechatOauthController
-};
+module.exports = { loginController, meController, wechatStartController, wechatCallbackController };

@@ -1,0 +1,36 @@
+<%
+const title = '推送日志';
+const page  = 'pushlogs';
+const body = `
+<div class="page-header">
+  <h2>推送日志</h2>
+  <button class="btn" onclick="loadLogs()">刷新</button>
+</div>
+<div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>时间</th><th>成员</th><th>openid</th><th>类型</th><th>状态</th><th>响应</th></tr></thead>
+    <tbody id="logBody"><tr><td colspan="6">加载中...</td></tr></tbody>
+  </table>
+</div>
+`;
+const pageScript = `<script>
+async function loadLogs() {
+  const res = await api('/api/push-logs');
+  const list = res ? res.data || [] : [];
+  document.getElementById('logBody').innerHTML = list.map(function(l) {
+    var resp = '-';
+    try { resp = l.response_json ? (JSON.parse(l.response_json).errmsg || 'ok') : '-'; } catch(e){}
+    return '<tr>' +
+      '<td>'+(l.created_at ? l.created_at.slice(0,19) : '-')+'</td>' +
+      '<td>'+(l.user_name||'-')+'</td>' +
+      '<td style="font-size:11px">'+((l.openid||'').slice(-8)||'-')+'</td>' +
+      '<td>'+(l.push_type||'-')+'</td>' +
+      '<td><span class="badge badge-'+(l.status==='success'?'income':'expense')+'">'+(l.status==='success'?'成功':'失败')+'</span></td>' +
+      '<td style="font-size:11px">'+resp+'</td>' +
+      '</tr>';
+  }).join('') || '<tr><td colspan="6">暂无日志</td></tr>';
+}
+loadLogs();
+</script>`;
+%>
+<%- include('layout', { title, page, body, pageScript }) %>
