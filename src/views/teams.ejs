@@ -73,6 +73,7 @@ const body = `
 `;
 const pageScript = `<script>
 let teams = [];
+let currentFormMembers = [];
 
 function describeRule(t) {
   var cfg = t.rule_config || {};
@@ -107,11 +108,19 @@ async function loadTeams() {
   }).join('') || '<tr><td colspan="6">暂无团队</td></tr>';
 }
 
+function setLeaderName(name) {
+  document.getElementById('tLeaderName').value = name;
+}
+
 function onRuleChange() {
   var type = document.getElementById('tRuleType').value;
   document.getElementById('leaderFields').style.display = (type === 'custom') ? 'none' : 'block';
   document.getElementById('reimburseRow').style.display = (type === 'zteam') ? 'block' : 'none';
   document.getElementById('customFields').style.display = (type === 'custom') ? 'block' : 'none';
+  // 切换到自定义且行为空时，自动用已加载成员填充
+  if (type === 'custom' && document.getElementById('allocationsWrap').children.length === 0 && currentFormMembers.length > 0) {
+    currentFormMembers.forEach(function(m) { addAllocation(m.name, ''); });
+  }
 }
 
 function addAllocation(name, ratio) {
@@ -166,18 +175,21 @@ async function showTeamForm(team) {
   document.getElementById('tReimburse').checked = cfg.reimburse_expenses !== false;
 
   // 加载该团队的所有成员（含admin）
-  var members = [];
+  currentFormMembers = [];
   if (team && team.id) {
     var res = await api('/api/users?team_id=' + team.id);
-    members = (res ? res.data || [] : []).filter(function(m){ return m.name; });
+    currentFormMembers = (res ? res.data || [] : []).filter(function(m){ return m.name; });
   }
 
-  // 显示团队成员标签
+  // 显示团队成员标签（可点击填充负责人姓名）
   var tagsEl = document.getElementById('memberTags');
   var tagListEl = document.getElementById('memberTagList');
-  if (members.length > 0) {
-    tagListEl.innerHTML = members.map(function(m) {
-      return '<span style="display:inline-block;background:#f0f0f0;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px">' + m.name + '</span>';
+  if (currentFormMembers.length > 0) {
+    tagListEl.innerHTML = currentFormMembers.map(function(m) {
+      return '<span onclick="setLeaderName(\'' + m.name.replace(/'/g, "\\'") + '\')" ' +
+        'title="点击设为负责人" ' +
+        'style="display:inline-block;background:#f0f0f0;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px;cursor:pointer;transition:background .15s" ' +
+        'onmouseover="this.style.background=\'#dde4ff\'" onmouseout="this.style.background=\'#f0f0f0\'">' + m.name + '</span>';
     }).join('');
     tagsEl.style.display = 'block';
   } else {
@@ -195,14 +207,14 @@ async function showTeamForm(team) {
     var savedMap = {};
     savedAllocs.forEach(function(a){ savedMap[a.name] = (a.ratio * 100).toFixed(0); });
 
-    if (members.length > 0) {
+    if (currentFormMembers.length > 0) {
       // 有团队成员：用成员列表，已保存的比例回填，新成员空白
-      members.forEach(function(m) {
+      currentFormMembers.forEach(function(m) {
         addAllocation(m.name, savedMap[m.name] || '');
       });
       // 已保存但不在成员列表中的也显示出来（可能已移出团队）
       savedAllocs.forEach(function(a) {
-        var inMembers = members.some(function(m){ return m.name === a.name; });
+        var inMembers = currentFormMembers.some(function(m){ return m.name === a.name; });
         if (!inMembers) addAllocation(a.name, (a.ratio*100).toFixed(0));
       });
     } else if (savedAllocs.length > 0) {
