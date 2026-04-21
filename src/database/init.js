@@ -150,11 +150,12 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_user_teams_user ON user_teams(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_teams_team ON user_teams(team_id);
     `);
-    db.exec(`
-      INSERT OR IGNORE INTO user_teams (user_id, team_id)
-      SELECT id, team_id FROM users WHERE team_id IS NOT NULL
-    `);
   }
+  // 每次启动都同步：users.team_id → user_teams（INSERT OR IGNORE 不会重复）
+  db.exec(`
+    INSERT OR IGNORE INTO user_teams (user_id, team_id)
+    SELECT id, team_id FROM users WHERE team_id IS NOT NULL
+  `);
 
   // teams表补充新列
   if (tableExists('teams')) {
