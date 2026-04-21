@@ -56,6 +56,17 @@ const body = `
       <div id="ratioSum" style="margin-top:8px;font-size:13px;color:#666"></div>
     </div>
 
+    <div id="ruleMembersSection" style="display:none;border:1px solid #c8d8ff;border-radius:8px;padding:14px;margin-top:12px;background:#f8f9ff">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div>
+          <span style="font-size:14px;font-weight:600;color:#333">成员分账配置</span>
+          <span style="font-size:12px;color:#888;margin-left:8px">（设置后优先于上方规则；留空则用上方规则）</span>
+        </div>
+        <button type="button" class="btn btn-sm" onclick="clearRuleMembers()">清空</button>
+      </div>
+      <div id="ruleMembersWrap"></div>
+    </div>
+
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">保存</button>
       <button type="button" class="btn" onclick="hideTeamForm()">取消</button>
@@ -110,6 +121,64 @@ async function loadTeams() {
 
 function pickLeader(i) {
   if (currentFormMembers[i]) document.getElementById('tLeaderName').value = currentFormMembers[i].name;
+}
+
+function renderRuleMembers(members, savedRuleMembers) {
+  var wrap = document.getElementById('ruleMembersWrap');
+  if (members.length === 0) {
+    wrap.innerHTML = '<div style="color:#aaa;font-size:13px">请先在成员管理中为该团队分配成员</div>';
+    return;
+  }
+  var ruleMap = {};
+  (savedRuleMembers || []).forEach(function(r) { ruleMap[r.member_name] = r; });
+  wrap.innerHTML = members.map(function(m, i) {
+    var rm = ruleMap[m.name] || {};
+    var mode = rm.rule_mode || 'ratio';
+    var val = mode === 'formula' ? (rm.formula || '') : (rm.ratio != null ? (rm.ratio * 100).toFixed(0) : '');
+    return '<div class="rm-row" data-name="' + m.name + '" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">' +
+      '<span style="flex:2;font-size:14px">' + m.name + '</span>' +
+      '<select class="rm-mode" onchange="onRmModeChange(this)" style="flex:1;border:1px solid #ddd;border-radius:6px;padding:7px 8px;font-size:13px">' +
+        '<option value="ratio"' + (mode === 'ratio' ? ' selected' : '') + '>固定比例</option>' +
+        '<option value="formula"' + (mode === 'formula' ? ' selected' : '') + '>公式</option>' +
+      '</select>' +
+      '<input class="rm-val" type="text" value="' + val + '" ' +
+        'placeholder="' + (mode === 'ratio' ? '如：20（%）' : '如：income*0.2') + '" ' +
+        'style="flex:2;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:14px">' +
+      '<span class="rm-unit" style="font-size:13px;color:#888;min-width:16px">' + (mode === 'ratio' ? '%' : '') + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function onRmModeChange(sel) {
+  var row = sel.parentNode;
+  var inp = row.querySelector('.rm-val');
+  var unit = row.querySelector('.rm-unit');
+  var mode = sel.value;
+  inp.value = '';
+  inp.placeholder = mode === 'ratio' ? '如：20（%）' : '如：income*0.2';
+  unit.textContent = mode === 'ratio' ? '%' : '';
+}
+
+function clearRuleMembers() {
+  document.querySelectorAll('#ruleMembersWrap .rm-row .rm-val').forEach(function(inp) { inp.value = ''; });
+}
+
+function collectRuleMembers() {
+  var rows = document.querySelectorAll('#ruleMembersWrap .rm-row');
+  var result = [];
+  rows.forEach(function(row) {
+    var name = row.getAttribute('data-name');
+    var mode = row.querySelector('.rm-mode').value;
+    var val = row.querySelector('.rm-val').value.trim();
+    if (!val) return;
+    if (mode === 'ratio') {
+      var r = parseFloat(val);
+      if (!isNaN(r) && r > 0) result.push({ member_name: name, rule_mode: 'ratio', ratio: r / 100 });
+    } else {
+      result.push({ member_name: name, rule_mode: 'formula', formula: val });
+    }
+  });
+  return result;
 }
 
 function onRuleChange() {
@@ -221,6 +290,14 @@ async function showTeamForm(team) {
     }
   }
 
+  // 成员分账配置区段
+  if (currentFormMembers.length > 0 || (team && team.rule_members && team.rule_members.length > 0)) {
+    document.getElementById('ruleMembersSection').style.display = 'block';
+    renderRuleMembers(currentFormMembers, team ? (team.rule_members || []) : []);
+  } else {
+    document.getElementById('ruleMembersSection').style.display = 'none';
+  }
+
   onRuleChange();
   document.getElementById('teamFormWrap').scrollIntoView({ behavior: 'smooth' });
 }
@@ -270,6 +347,7 @@ document.getElementById('teamForm').addEventListener('submit', async function(e)
     name: document.getElementById('tName').value,
     rule_type: ruleType,
     rule_config: cfg,
+    rule_members: collectRuleMembers(),
   };
   var res = await api(id ? '/api/teams/'+id : '/api/teams', {
     method: id ? 'PUT' : 'POST', body: JSON.stringify(body)

@@ -1,5 +1,6 @@
 const { createTeam, getAllTeams, getTeamById, getTeamByName, updateTeam } = require('../models/team-model');
 const { HttpError } = require('../utils/http-error');
+const { getRuleMembers, setRuleMembers } = require('../models/team-rule-member-model');
 
 function normalizeRuleConfig(rule_type, rule_config = {}) {
   if (rule_type === 'zteam') {
@@ -24,23 +25,27 @@ function normalizeRuleConfig(rule_type, rule_config = {}) {
 }
 
 function listTeams() {
-  return getAllTeams();
+  return getAllTeams().map(t => ({ ...t, rule_members: getRuleMembers(t.id) }));
 }
 
-function createNewTeam({ name, rule_type, rule_config }) {
+function createNewTeam({ name, rule_type, rule_config, rule_members }) {
   if (!name) throw new HttpError(400, '团队名称不能为空');
   if (!rule_type) throw new HttpError(400, '请选择分账规则类型');
   if (getTeamByName(name)) throw new HttpError(409, '团队名称已存在');
   const config = normalizeRuleConfig(rule_type, rule_config || {});
-  return createTeam({ name, rule_type, rule_config: config });
+  const team = createTeam({ name, rule_type, rule_config: config });
+  if (Array.isArray(rule_members)) setRuleMembers(team.id, rule_members);
+  return { ...team, rule_members: getRuleMembers(team.id) };
 }
 
-function updateExistingTeam(teamId, { name, rule_type, rule_config, status }) {
+function updateExistingTeam(teamId, { name, rule_type, rule_config, status, rule_members }) {
   const existing = getTeamById(teamId);
   if (!existing) throw new HttpError(404, '团队不存在');
   if (name && name !== existing.name && getTeamByName(name)) throw new HttpError(409, '团队名称已存在');
   const config = rule_type ? normalizeRuleConfig(rule_type, rule_config || {}) : existing.rule_config;
-  return updateTeam(teamId, { name, rule_type, rule_config: config, status });
+  const team = updateTeam(teamId, { name, rule_type, rule_config: config, status });
+  if (Array.isArray(rule_members)) setRuleMembers(teamId, rule_members);
+  return { ...team, rule_members: getRuleMembers(teamId) };
 }
 
 module.exports = { listTeams, createNewTeam, updateExistingTeam };

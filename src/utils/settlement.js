@@ -1,4 +1,31 @@
 const { fromCents, roundShare } = require('./money');
+const { getRuleMembers } = require('../models/team-rule-member-model');
+
+function evalFormula(formula, vars) {
+  try {
+    const fn = new Function('income', 'tax', 'expense', 'adjust', 'distributable',
+      'return (' + formula + ')');
+    const result = fn(vars.income, vars.tax, vars.expense, vars.adjust, vars.distributable);
+    return typeof result === 'number' && isFinite(result) ? Math.round(result) : 0;
+  } catch (e) { return 0; }
+}
+
+function calcFromRuleMembers(ruleMembers, personNames, vars) {
+  const result = new Map();
+  const ruleMap = new Map(ruleMembers.map(m => [m.member_name, m]));
+  personNames.forEach(name => {
+    const rm = ruleMap.get(name);
+    if (!rm) { result.set(name, 0); return; }
+    let share = 0;
+    if (rm.rule_mode === 'formula' && rm.formula) {
+      share = evalFormula(rm.formula, vars);
+    } else if (rm.ratio != null) {
+      share = roundShare(vars.distributable, Number(rm.ratio));
+    }
+    result.set(name, share);
+  });
+  return result;
+}
 
 // 将最少转账路径计算出来（贪心算法）
 function buildTransfers(memberSettlements) {
@@ -115,7 +142,20 @@ function calculateSettlement(team, personNames, records) {
   const distributableCents = totalIncomeCents - totalTaxCents - totalExpenseCents + totalAdjustCents;
 
   let shouldGetMap;
-  if (team.rule_type === 'zteam') {
+  const ruleMembers = team.id ? getRuleMembers(team.id) : [];
+  if (ruleMembers.length > 0) {
+    // 新规则：team_rule_members 有配置则优先使用
+    shouldGetMap = calcFromRuleMembers(ruleMembers,
+      personNames,
+      { income: totalIncomeCents, tax: totalTaxCents, expense: totalExpenseCents,
+        adjust: totalAdjustCents, distributable: distributableCents }
+    );
+    // 垫付支出的人加回报销金额
+    records.filter(r => r.item_type === 'expense').forEach(r => {
+      const amt = Math.abs(r.amount);
+      shouldGetMap.set(r.person_name, (shouldGetMap.get(r.person_name) || 0) + amt);
+    });
+  } else if (team.rule_type === 'zteam') {
     // zteam: should_get 里已含 leader 报销；sum(should_get) = income - tax + adjust
     shouldGetMap = calcZteam(team, personNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents);
   } else {
