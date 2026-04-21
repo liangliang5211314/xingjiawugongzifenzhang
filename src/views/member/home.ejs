@@ -13,17 +13,20 @@
     .m-modal h3 { margin:0 0 18px; font-size:17px; }
     .m-field { margin-bottom:14px; }
     .m-field label { display:block; font-size:13px; color:#666; margin-bottom:5px; }
-    .m-field input[type=text],.m-field input[type=password],.m-field input[type=tel],.m-field input[type=number],.m-field input[type=month] {
-      width:100%; box-sizing:border-box; border:1px solid #ddd; border-radius:8px; padding:10px 12px; font-size:15px;
+    .m-field input[type=text],.m-field input[type=password],.m-field input[type=tel],.m-field input[type=number],.m-field input[type=month],.m-field select,.m-field textarea {
+      width:100%; box-sizing:border-box; border:1px solid #ddd; border-radius:8px; padding:10px 12px; font-size:15px; background:#fff;
     }
-    .m-field input:focus { outline:none; border-color:#6c63ff; }
+    .m-field input:focus,.m-field select:focus,.m-field textarea:focus { outline:none; border-color:#6c63ff; }
     .m-modal-btns { display:flex; gap:10px; margin-top:20px; }
     .m-modal-btns button { flex:1; padding:12px; border-radius:10px; border:none; font-size:15px; cursor:pointer; }
     .m-btn-cancel { background:#f0f0f0; color:#333; }
     .m-btn-save { background:#6c63ff; color:#fff; }
-    .m-report-card { background:#f0f4ff; border-radius:12px; padding:14px; margin-bottom:8px; }
-    .m-report-amount { font-size:22px; font-weight:700; color:#6c63ff; }
-    .m-report-meta { font-size:12px; color:#999; margin-top:4px; }
+    .m-report-item { background:#f0f4ff; border-radius:12px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; }
+    .m-report-amount { font-size:18px; font-weight:700; color:#6c63ff; }
+    .m-report-label { font-size:13px; color:#555; }
+    .m-report-meta { font-size:11px; color:#999; margin-top:2px; }
+    .m-report-expense { background:#fff3f3; }
+    .m-report-expense .m-report-amount { color:#f44336; }
     .m-img-preview { margin-top:8px; max-width:100%; max-height:160px; border-radius:8px; display:none; }
     .m-upload-label { display:inline-block; padding:8px 16px; background:#f0f0f0; border-radius:8px; font-size:14px; cursor:pointer; }
     .m-header-row { display:flex; align-items:center; justify-content:space-between; }
@@ -47,13 +50,14 @@
       </div>
     </div>
 
+    <div id="teamTabsWrap" style="display:none;gap:8px;overflow-x:auto;padding:0 16px 8px;margin-bottom:4px"></div>
+
     <div class="m-month-bar">
       <button onclick="prevMonth()">‹</button>
       <span id="monthLabel">-</span>
       <button onclick="nextMonth()">›</button>
     </div>
 
-    <!-- 本月上报 -->
     <div class="m-card">
       <div class="m-header-row" style="margin-bottom:12px">
         <span class="m-card-title" style="margin:0">本月收益上报</span>
@@ -62,9 +66,7 @@
       <div id="reportStatus"><div class="m-empty">本月暂未上报</div></div>
     </div>
 
-    <div id="incomeCards" class="m-stats">
-      <div class="m-stat-card loading">加载中...</div>
-    </div>
+    <div id="incomeCards" class="m-stats"></div>
 
     <div id="compareSection" style="display:none" class="m-card">
       <div class="m-card-title">历史对比</div>
@@ -77,7 +79,7 @@
     </div>
   </div>
 
-  <!-- 编辑资料弹窗 -->
+  <!-- 编辑资料 -->
   <div class="m-modal-mask" id="editMask">
     <div class="m-modal">
       <h3>编辑个人资料</h3>
@@ -104,26 +106,38 @@
     </div>
   </div>
 
-  <!-- 上报收益弹窗 -->
+  <!-- 上报收益 -->
   <div class="m-modal-mask" id="reportMask">
     <div class="m-modal">
-      <h3>上报本月京粉收益</h3>
+      <h3>上报本月收益</h3>
+      <div class="m-field" id="reportTeamFieldWrap" style="display:none">
+        <label>所属团队</label>
+        <select id="reportTeamSelect"></select>
+      </div>
       <div class="m-field">
         <label>月份</label>
         <input type="month" id="reportMonth">
       </div>
       <div class="m-field">
-        <label>本月京粉收益（元，小数点后两位有效）</label>
-        <input type="number" id="reportAmount" step="0.01" min="0" placeholder="0.00">
+        <label>类型</label>
+        <select id="reportItemType" onchange="onReportTypeChange()">
+          <option value="income_jingfen">收入 — 京粉收入</option>
+          <option value="income_taobao">收入 — 淘宝收入</option>
+          <option value="expense">支出</option>
+        </select>
       </div>
       <div class="m-field">
+        <label id="reportAmountLabel">本月京粉收益（元）</label>
+        <input type="number" id="reportAmount" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="m-field" id="reportScreenshotField">
         <label>收益截图</label>
         <label class="m-upload-label" for="reportImg">📷 选择图片</label>
         <input type="file" id="reportImg" accept="image/*" style="display:none" onchange="previewImg(this)">
         <img id="imgPreview" class="m-img-preview">
       </div>
       <div class="m-field">
-        <label>备注（可选）</label>
+        <label id="reportNoteLabel">备注（可选）</label>
         <input type="text" id="reportNote" placeholder="可选说明">
       </div>
       <div class="m-modal-btns">
@@ -138,6 +152,8 @@
     var token = '';
     var currentUser = null;
     var currentMonth = new Date().toISOString().slice(0,7);
+    var currentTeamId = null;
+    var userTeams = [];
 
     function getToken() {
       var hash = location.hash.replace('#','');
@@ -173,7 +189,33 @@
       loadAll();
     }
 
-    // ── 编辑资料 ──
+    function renderTeamTabs() {
+      var wrap = document.getElementById('teamTabsWrap');
+      wrap.style.display = 'flex';
+      wrap.innerHTML = userTeams.map(function(t) {
+        return '<button style="flex:none;padding:6px 16px;border-radius:20px;border:1.5px solid #6c63ff;font-size:13px;cursor:pointer;white-space:nowrap;' +
+               (t.id === currentTeamId ? 'background:#6c63ff;color:#fff' : 'background:none;color:#6c63ff') +
+               '" onclick="switchTeam(' + t.id + ')">' + t.name + '</button>';
+      }).join('');
+    }
+
+    function switchTeam(id) {
+      currentTeamId = id;
+      var team = userTeams.find(function(t) { return t.id === id; });
+      document.getElementById('teamName').textContent = team ? team.name : '-';
+      if (userTeams.length > 1) renderTeamTabs();
+      loadAll();
+    }
+
+    function onReportTypeChange() {
+      var type = document.getElementById('reportItemType').value;
+      var label = document.getElementById('reportAmountLabel');
+      var noteLabel = document.getElementById('reportNoteLabel');
+      if (type === 'income_jingfen') { label.textContent = '本月京粉收益（元）'; noteLabel.textContent = '备注（可选）'; }
+      else if (type === 'income_taobao') { label.textContent = '本月淘宝收益（元）'; noteLabel.textContent = '备注（可选）'; }
+      else { label.textContent = '支出金额（元）'; noteLabel.textContent = '支出说明（必填）'; }
+    }
+
     function openEdit() {
       document.getElementById('editName').value = currentUser ? currentUser.name||'' : '';
       document.getElementById('editJfRealname').value = currentUser ? currentUser.jingfen_realname||'' : '';
@@ -195,13 +237,23 @@
       if (res && res.ok) { closeEdit(); init(); } else { alert('保存失败，请重试'); }
     }
 
-    // ── 上报收益 ──
     function openReport() {
+      var teamFieldWrap = document.getElementById('reportTeamFieldWrap');
+      if (userTeams.length > 1) {
+        teamFieldWrap.style.display = 'block';
+        document.getElementById('reportTeamSelect').innerHTML = userTeams.map(function(t) {
+          return '<option value="' + t.id + '"' + (t.id === currentTeamId ? ' selected' : '') + '>' + t.name + '</option>';
+        }).join('');
+      } else {
+        teamFieldWrap.style.display = 'none';
+      }
       document.getElementById('reportMonth').value = currentMonth;
       document.getElementById('reportAmount').value = '';
       document.getElementById('reportNote').value = '';
       document.getElementById('reportImg').value = '';
       document.getElementById('imgPreview').style.display = 'none';
+      document.getElementById('reportItemType').value = 'income_jingfen';
+      onReportTypeChange();
       document.getElementById('reportMask').classList.add('show');
     }
     function closeReport() { document.getElementById('reportMask').classList.remove('show'); }
@@ -221,14 +273,30 @@
     async function submitReport() {
       var month = document.getElementById('reportMonth').value;
       var amount = document.getElementById('reportAmount').value;
+      var itemTypeRaw = document.getElementById('reportItemType').value;
+      var note = document.getElementById('reportNote').value;
       if (!month || amount === '') { alert('请填写月份和金额'); return; }
+      if (itemTypeRaw === 'expense' && !note.trim()) { alert('支出请填写备注说明'); return; }
+
+      var teamId = currentTeamId;
+      if (userTeams.length > 1) teamId = Number(document.getElementById('reportTeamSelect').value);
+      if (!teamId) { alert('请选择团队'); return; }
+
+      var itemType, itemName;
+      if (itemTypeRaw === 'income_jingfen') { itemType = 'income'; itemName = '京粉收入'; }
+      else if (itemTypeRaw === 'income_taobao') { itemType = 'income'; itemName = '淘宝收入'; }
+      else { itemType = 'expense'; itemName = '支出'; }
+
       var btn = document.getElementById('btnSubmitReport');
       btn.disabled = true; btn.textContent = '提交中...';
 
       var fd = new FormData();
       fd.append('month', month);
       fd.append('amount', amount);
-      fd.append('note', document.getElementById('reportNote').value);
+      fd.append('team_id', teamId);
+      fd.append('item_type', itemType);
+      fd.append('item_name', itemName);
+      fd.append('note', note);
       var imgFile = document.getElementById('reportImg').files[0];
       if (imgFile) fd.append('screenshot', imgFile);
 
@@ -239,25 +307,32 @@
       });
       var data = await res.json();
       btn.disabled = false; btn.textContent = '提交';
-      if (data && data.ok) {
-        closeReport();
-        loadReport();
-        loadIncome();
-      } else {
-        alert(data.message || '提交失败');
-      }
+      if (data && data.ok) { closeReport(); loadReport(); loadIncome(); }
+      else { alert(data.message || '提交失败'); }
     }
 
     async function loadReport() {
-      var res = await memberApi('/member/report?month=' + currentMonth);
+      if (!currentTeamId) {
+        document.getElementById('reportStatus').innerHTML = '<div class="m-empty">未绑定团队</div>';
+        return;
+      }
+      var res = await memberApi('/member/report?month=' + currentMonth + '&team_id=' + currentTeamId);
       var el = document.getElementById('reportStatus');
-      if (res && res.data) {
-        var r = res.data;
-        el.innerHTML = '<div class="m-report-card">' +
-          '<div class="m-report-amount">¥' + r.amount.toFixed(2) + '</div>' +
-          '<div class="m-report-meta">已上报 · ' + r.updated_at.slice(0,10) + '</div>' +
-          (r.screenshot ? '<img src="' + r.screenshot + '" style="margin-top:8px;max-width:100%;max-height:140px;border-radius:8px">' : '') +
+      var reports = (res && res.data) ? res.data : [];
+      if (reports.length) {
+        el.innerHTML = reports.map(function(r) {
+          var isExpense = r.item_type === 'expense';
+          return '<div class="m-report-item' + (isExpense ? ' m-report-expense' : '') + '">' +
+            '<div>' +
+              '<div class="m-report-label">' + r.item_name + '</div>' +
+              '<div class="m-report-meta">已上报 · ' + (r.updated_at||'').slice(0,10) + (r.note ? ' · '+r.note : '') + '</div>' +
+            '</div>' +
+            '<div style="text-align:right">' +
+              '<div class="m-report-amount">' + (isExpense ? '-' : '') + '¥' + r.amount.toFixed(2) + '</div>' +
+              (r.screenshot ? '<img src="' + r.screenshot + '" style="margin-top:4px;height:36px;border-radius:4px">' : '') +
+            '</div>' +
           '</div>';
+        }).join('');
       } else {
         el.innerHTML = '<div class="m-empty">本月暂未上报</div>';
       }
@@ -269,9 +344,23 @@
       var me = await memberApi('/member/me');
       if (!me || !me.ok) return;
       currentUser = me.data.user;
+      userTeams = me.data.teams || [];
       document.getElementById('userName').textContent = currentUser.name || '未设置姓名';
-      document.getElementById('teamName').textContent = me.data.team ? me.data.team.name : '未绑定团队';
-      loadAll();
+      if (userTeams.length === 0) {
+        document.getElementById('teamName').textContent = '未绑定团队';
+        currentTeamId = null;
+        document.getElementById('incomeCards').innerHTML = '<div class="m-empty">未绑定团队，请联系管理员</div>';
+        document.getElementById('recordList').innerHTML = '';
+      } else if (userTeams.length === 1) {
+        currentTeamId = userTeams[0].id;
+        document.getElementById('teamName').textContent = userTeams[0].name;
+        loadAll();
+      } else {
+        currentTeamId = userTeams[0].id;
+        document.getElementById('teamName').textContent = userTeams[0].name;
+        renderTeamTabs();
+        loadAll();
+      }
     }
 
     function loadAll() {
@@ -281,7 +370,8 @@
     }
 
     async function loadIncome() {
-      var res = await memberApi('/member/income/current?month=' + currentMonth);
+      if (!currentTeamId) return;
+      var res = await memberApi('/member/income/current?month=' + currentMonth + '&team_id=' + currentTeamId);
       if (!res || !res.ok) return;
       var d = res.data;
       if (!d) {

@@ -11,17 +11,29 @@ const body = `
   <div class="form-grid">
     <div class="form-row">
       <label>团队</label>
-      <select id="sTeam" onchange="showTeamFormula()"></select>
+      <select id="sTeam" onchange="onTeamMonthChange()"></select>
     </div>
     <div class="form-row">
       <label>月份</label>
-      <input type="month" id="sMonth">
+      <input type="month" id="sMonth" onchange="onTeamMonthChange()">
     </div>
   </div>
   <div id="teamFormulaBox" style="display:none;margin:8px 0 12px;padding:10px 14px;background:#f0f4ff;border-radius:8px;font-size:13px;color:#444;line-height:1.7"></div>
+
+  <!-- 成员收入预览 -->
+  <div id="memberPreviewSection" style="display:none;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#333">团队成员本月上报收入</div>
+    <div class="table-wrap" style="margin-bottom:0">
+      <table class="data-table">
+        <thead><tr><th>成员</th><th>京粉收入</th><th>淘宝收入</th><th>支出</th><th>上报合计</th><th>状态</th></tr></thead>
+        <tbody id="memberPreviewBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="form-actions">
     <button class="btn btn-primary" onclick="runSettle()">🧮 运行结算</button>
-    <button class="btn" onclick="loadSettlements()">📋 查看已有结算</button>
+    <button class="btn" onclick="loadSettlements()">📋 查看历史结算</button>
   </div>
   <div id="settleErr" class="error-msg" style="display:none"></div>
 </div>
@@ -38,14 +50,14 @@ const body = `
     </div>
   </div>
   <div class="stats-grid" id="settleSummary"></div>
-  <h4 style="margin:.75rem 0 .5rem">成员明细</h4>
+  <h4 style="margin:.75rem 0 .5rem">成员分成明细</h4>
   <div class="table-wrap">
     <table class="data-table">
-      <thead><tr><th>姓名</th><th>应收</th><th>实收</th><th>差额</th></tr></thead>
+      <thead><tr><th>姓名</th><th>应收</th><th>实收</th><th>差额（正=待收，负=待付）</th></tr></thead>
       <tbody id="settleMemberBody"></tbody>
     </table>
   </div>
-  <h4 style="margin:.75rem 0 .5rem">转账路径（最少转账）</h4>
+  <h4 style="margin:.75rem 0 .5rem">最优转账方案</h4>
   <div id="settleTransfers" class="transfers-list"></div>
 </div>
 
@@ -67,7 +79,7 @@ async function initPage() {
   document.getElementById('sTeam').innerHTML = allTeams.map(t =>
     '<option value="'+t.id+'">'+t.name+'</option>').join('');
   document.getElementById('sMonth').value = new Date().toISOString().slice(0,7);
-  showTeamFormula();
+  onTeamMonthChange();
   loadSettlements();
 }
 
@@ -76,31 +88,62 @@ function showTeamFormula() {
   var team = allTeams.find(function(t){ return t.id === teamId; });
   var box = document.getElementById('teamFormulaBox');
   if (!team) { box.style.display = 'none'; return; }
-  var cfg = {};
-  try { cfg = JSON.parse(team.rule_config || '{}'); } catch(e) {}
+  var cfg = team.rule_config || {};
   var html = '<strong>分成规则：</strong>';
   if (team.rule_type === 'zteam') {
     var leader = cfg.leader_name || '（未设置）';
-    var ratio  = cfg.ratio != null ? (cfg.ratio * 100).toFixed(0) + '%' : '?%';
-    html += 'Z团队模式 — 负责人 <strong>' + leader + '</strong> 获得总收入×' + ratio + ' + 垫付支出；其余成员平分剩余';
+    var ratio  = cfg.leader_ratio != null ? (cfg.leader_ratio * 100).toFixed(0) + '%' : '?%';
+    html += 'Z团队 — <strong>' + leader + '</strong> 获得总收入×' + ratio + ' + 垫付支出；其余成员平分剩余';
   } else if (team.rule_type === 'standard') {
     var leader = cfg.leader_name || '（未设置）';
-    var ratio  = cfg.ratio != null ? (cfg.ratio * 100).toFixed(0) + '%' : '?%';
-    html += '标准模式 — 负责人 <strong>' + leader + '</strong> 获得总收入×' + ratio + '；其余成员平分剩余';
+    var ratio  = cfg.leader_ratio != null ? (cfg.leader_ratio * 100).toFixed(0) + '%' : '?%';
+    html += '标准 — <strong>' + leader + '</strong> 获得总收入×' + ratio + '；其余成员平分剩余';
   } else if (team.rule_type === 'custom') {
     var allocs = cfg.allocations || [];
-    if (allocs.length) {
-      html += '自定义比例：' + allocs.map(function(a){
-        return '<strong>' + a.name + '</strong> ' + (a.ratio * 100).toFixed(0) + '%';
-      }).join('，');
-    } else {
-      html += '自定义（未配置分配规则）';
-    }
-  } else {
-    html += team.rule_type;
+    html += '自定义：' + (allocs.length ? allocs.map(function(a){
+      return '<strong>' + a.name + '</strong> ' + (a.ratio * 100).toFixed(0) + '%';
+    }).join('，') : '（未配置）');
   }
   box.innerHTML = html;
   box.style.display = 'block';
+}
+
+async function loadMemberPreview() {
+  var teamId = document.getElementById('sTeam').value;
+  var month  = document.getElementById('sMonth').value;
+  var sec = document.getElementById('memberPreviewSection');
+  if (!teamId || !month) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+
+  var [ur, rr] = await Promise.all([
+    api('/api/users?team_id=' + teamId + '&role=member'),
+    api('/api/member-reports?team_id=' + teamId + '&month=' + month),
+  ]);
+  var members = ur ? ur.data || [] : [];
+  var reports = rr ? rr.data || [] : [];
+
+  document.getElementById('memberPreviewBody').innerHTML = members.map(function(u) {
+    var userReports = reports.filter(function(r){ return r.user_id === u.id; });
+    var jingfen  = userReports.find(function(r){ return r.item_name === '京粉收入' || r.item_name === '京粉收益'; });
+    var taobao   = userReports.find(function(r){ return r.item_name === '淘宝收入'; });
+    var expenses = userReports.filter(function(r){ return r.item_type === 'expense'; });
+    var expTotal = expenses.reduce(function(s,r){ return s + r.amount; }, 0);
+    var total    = userReports.filter(function(r){ return r.item_type === 'income'; }).reduce(function(s,r){ return s + r.amount; }, 0);
+    var hasReport = userReports.length > 0;
+    return '<tr>' +
+      '<td><strong>' + (u.name||'-') + '</strong></td>' +
+      '<td>' + (jingfen ? '<span style="color:#6c63ff">¥' + parseFloat(jingfen.amount).toFixed(2) + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
+      '<td>' + (taobao  ? '<span style="color:#6c63ff">¥' + parseFloat(taobao.amount).toFixed(2)  + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
+      '<td>' + (expTotal > 0 ? '<span style="color:#f44336">¥' + parseFloat(expTotal).toFixed(2) + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
+      '<td><strong>' + (hasReport ? '¥' + parseFloat(total).toFixed(2) : '-') + '</strong></td>' +
+      '<td>' + (hasReport ? '<span style="color:#4caf50">✅已上报</span>' : '<span style="color:#f44336">⚠️未上报</span>') + '</td>' +
+      '</tr>';
+  }).join('') || '<tr><td colspan="6" style="color:#999">该团队暂无成员</td></tr>';
+}
+
+function onTeamMonthChange() {
+  showTeamFormula();
+  loadMemberPreview();
 }
 
 async function runSettle() {
@@ -108,12 +151,14 @@ async function runSettle() {
   const month  = document.getElementById('sMonth').value;
   if (!teamId || !month) return alert('请选择团队和月份');
   const res = await api('/api/settlements/run', { method:'POST', body: JSON.stringify({team_id:Number(teamId),month}) });
-  if (res && res.ok) showSettleResult(res.data);
+  if (res && res.ok) { showSettleResult(res.data); loadSettlements(); loadMemberPreview(); }
+  else { var e = document.getElementById('settleErr'); e.textContent = (res&&res.message)||'结算失败'; e.style.display='block'; }
 }
 
 function showSettleResult(s) {
   currentSettlement = s;
   document.getElementById('settleResult').style.display = 'block';
+  document.getElementById('settleErr').style.display = 'none';
   document.getElementById('btnPush').dataset.id = s.id;
   document.getElementById('btnFeishu').dataset.team = s.team_id;
   document.getElementById('btnFeishu').dataset.month = s.month;
@@ -128,14 +173,20 @@ function showSettleResult(s) {
     {label:'总支出', value:'¥'+(r.total_expense||0)},
     {label:'退税',   value:'¥'+(r.total_tax||0)},
     {label:'可分配', value:'¥'+(r.distributable||0)},
-  ].map(function(s){return '<div class="stat-card"><div class="stat-label">'+s.label+'</div><div class="stat-value">'+s.value+'</div></div>';}).join('');
+  ].map(function(item){return '<div class="stat-card"><div class="stat-label">'+item.label+'</div><div class="stat-value">'+item.value+'</div></div>';}).join('');
   document.getElementById('settleMemberBody').innerHTML = (r.members||[]).map(function(m) {
-    var cls = parseFloat(m.diff)>0 ? 'text-green' : parseFloat(m.diff)<0 ? 'text-red' : '';
-    return '<tr><td>'+m.name+'</td><td>¥'+m.should_get+'</td><td>¥'+m.actual+'</td><td class="'+cls+'">¥'+m.diff+'</td></tr>';
+    var diff = parseFloat(m.diff);
+    var cls = diff > 0 ? 'text-green' : diff < 0 ? 'text-red' : '';
+    var arrow = diff > 0 ? '↑待收' : diff < 0 ? '↓待付' : '✅平衡';
+    return '<tr><td><strong>'+m.name+'</strong></td><td>¥'+m.should_get+'</td><td>¥'+m.actual+'</td>' +
+      '<td class="'+cls+'">¥'+m.diff+' <small>'+arrow+'</small></td></tr>';
   }).join('') || '<tr><td colspan="4">-</td></tr>';
   document.getElementById('settleTransfers').innerHTML = (r.transfers||[]).length
-    ? (r.transfers||[]).map(t => '💸 <strong>'+t.from+'</strong> 转给 <strong>'+t.to+'</strong>：¥'+t.amount).join('<br>')
-    : '<div class="text-muted">无需转账（已平衡）</div>';
+    ? (r.transfers||[]).map(function(t){
+        return '<div style="padding:8px 12px;background:#fff8e1;border-radius:8px;margin-bottom:6px">💸 <strong>'+t.from+'</strong> 转给 <strong>'+t.to+'</strong>：<span style="color:#6c63ff;font-weight:700">¥'+t.amount+'</span></div>';
+      }).join('')
+    : '<div class="text-muted" style="padding:8px">无需转账（已完全平衡）</div>';
+  document.getElementById('settleResult').scrollIntoView({ behavior:'smooth' });
 }
 
 async function pushSettle() {
@@ -172,19 +223,17 @@ async function loadSettlements() {
       '<td>¥'+(s.total_expense/100).toFixed(2)+'</td>' +
       '<td>'+(s.year_compare_last  != null ? '¥'+(s.year_compare_last/100).toFixed(2) : '-')+'</td>' +
       '<td>'+(s.year_compare_prev2 != null ? '¥'+(s.year_compare_prev2/100).toFixed(2) : '-')+'</td>' +
-      '<td>'+(s.pushed_at ? '✅' : '-')+'</td>' +
-      '<td><button class="btn btn-sm" onclick="viewSettle(this)" data-id="'+s.id+'">查看</button></td>' +
+      '<td>'+(s.pushed_at ? '✅'+s.pushed_at.slice(0,10) : '-')+'</td>' +
+      '<td><button class="btn btn-sm" onclick="viewSettle(this)" data-id="'+s.id+'">查看明细</button></td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="8">暂无结算记录</td></tr>';
-
-  // store settlements for viewSettle lookup
   window._settlements = list;
 }
 
 function viewSettle(btn) {
   const id = parseInt(btn.dataset.id);
   const s = (window._settlements||[]).find(function(x){return x.id===id;});
-  if (s) { showSettleResult(s); document.getElementById('settleResult').scrollIntoView({behavior:'smooth'}); }
+  if (s) showSettleResult(s);
 }
 
 initPage();

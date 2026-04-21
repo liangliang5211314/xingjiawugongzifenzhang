@@ -67,20 +67,31 @@ CREATE TABLE IF NOT EXISTS settlements (
   UNIQUE(team_id, month)
 );
 
--- 成员收益上报
+-- 成员收益上报（每月可上报多条不同项目）
 CREATE TABLE IF NOT EXISTS member_income_reports (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id      INTEGER NOT NULL REFERENCES users(id),
   team_id      INTEGER NOT NULL REFERENCES teams(id),
   month        TEXT    NOT NULL,
-  amount       INTEGER NOT NULL DEFAULT 0,   -- 分（×100），截断小数
-  screenshot   TEXT,                         -- 图片路径 /uploads/xxx.jpg
+  item_type    TEXT    NOT NULL DEFAULT 'income', -- income / expense
+  item_name    TEXT    NOT NULL DEFAULT '京粉收益',
+  amount       INTEGER NOT NULL DEFAULT 0,        -- 分（×100），截断小数
+  screenshot   TEXT,                              -- 图片路径 /uploads/xxx.jpg
   note         TEXT,
   created_at   TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at   TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(user_id, team_id, month)
+  UNIQUE(user_id, team_id, month, item_name)
 );
 CREATE INDEX IF NOT EXISTS idx_member_reports_team_month ON member_income_reports(team_id, month);
+
+-- 用户-团队多对多关联
+CREATE TABLE IF NOT EXISTS user_teams (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, team_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_teams_user ON user_teams(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_teams_team ON user_teams(team_id);
 
 -- 推送日志
 CREATE TABLE IF NOT EXISTS push_logs (

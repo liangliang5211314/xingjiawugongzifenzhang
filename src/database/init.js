@@ -114,6 +114,48 @@ function runMigrations() {
     addColumnIfMissing('settlements', 'updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
   }
 
+  // member_income_reports：添加 item_type / item_name 列并更换 UNIQUE 约束
+  if (tableExists('member_income_reports') && !columnExists('member_income_reports', 'item_name')) {
+    db.exec(`
+      ALTER TABLE member_income_reports RENAME TO mir_old;
+      CREATE TABLE member_income_reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        team_id INTEGER NOT NULL REFERENCES teams(id),
+        month TEXT NOT NULL,
+        item_type TEXT NOT NULL DEFAULT 'income',
+        item_name TEXT NOT NULL DEFAULT '京粉收益',
+        amount INTEGER NOT NULL DEFAULT 0,
+        screenshot TEXT,
+        note TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, team_id, month, item_name)
+      );
+      CREATE INDEX IF NOT EXISTS idx_member_reports_team_month ON member_income_reports(team_id, month);
+      INSERT INTO member_income_reports (id, user_id, team_id, month, item_type, item_name, amount, screenshot, note, created_at, updated_at)
+        SELECT id, user_id, team_id, month, 'income', '京粉收益', amount, screenshot, note, created_at, updated_at FROM mir_old;
+      DROP TABLE mir_old;
+    `);
+  }
+
+  // 创建 user_teams 并迁移旧 users.team_id 数据
+  if (!tableExists('user_teams')) {
+    db.exec(`
+      CREATE TABLE user_teams (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, team_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_teams_user ON user_teams(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_teams_team ON user_teams(team_id);
+    `);
+    db.exec(`
+      INSERT OR IGNORE INTO user_teams (user_id, team_id)
+      SELECT id, team_id FROM users WHERE team_id IS NOT NULL
+    `);
+  }
+
   // teams表补充新列
   if (tableExists('teams')) {
     addColumnIfMissing('teams', 'status INTEGER NOT NULL DEFAULT 1');

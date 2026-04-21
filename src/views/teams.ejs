@@ -13,21 +13,44 @@ const body = `
     <input type="hidden" id="teamId">
     <div class="form-row">
       <label>团队名称 *</label>
-      <input type="text" id="tName" required placeholder="如：Z团队">
+      <input type="text" id="tName" required placeholder="如：性价屋Z团队">
     </div>
     <div class="form-row">
       <label>分账规则 *</label>
       <select id="tRuleType" onchange="onRuleChange()">
-        <option value="zteam">zteam（leader固定比例+报销）</option>
-        <option value="standard">standard（leader比例+平分）</option>
-        <option value="custom">custom（自定义比例）</option>
+        <option value="zteam">Z团队（负责人按比例+报销支出，其余人平分剩余）</option>
+        <option value="standard">标准（负责人按比例，其余人平分剩余，支出从总额扣除）</option>
+        <option value="custom">自定义（每人固定分成比例）</option>
       </select>
     </div>
-    <div class="form-row">
-      <label>规则配置 (JSON)</label>
-      <textarea id="tRuleConfig" rows="5" placeholder="{}"></textarea>
-      <small id="ruleHint" class="hint"></small>
+
+    <div id="leaderFields" style="border:1px solid #e8e8e8;border-radius:8px;padding:14px;margin-top:8px">
+      <div style="font-size:13px;color:#888;margin-bottom:10px">负责人配置</div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>负责人姓名 *</label>
+          <input type="text" id="tLeaderName" placeholder="与成员管理中的姓名完全一致">
+        </div>
+        <div class="form-row">
+          <label>负责人分成比例（%）</label>
+          <input type="number" id="tLeaderRatio" step="1" min="0" max="100" value="20" placeholder="20">
+        </div>
+      </div>
+      <div id="reimburseRow" class="form-row">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="tReimburse" checked style="width:auto">
+          负责人报销所有支出（支出全额加入负责人应收）
+        </label>
+      </div>
     </div>
+
+    <div id="customFields" style="display:none;border:1px solid #e8e8e8;border-radius:8px;padding:14px;margin-top:8px">
+      <div style="font-size:13px;color:#888;margin-bottom:10px">各成员分成比例（加起来须等于100%）</div>
+      <div id="allocationsWrap"></div>
+      <button type="button" class="btn" style="margin-top:8px" onclick="addAllocation()">+ 添加成员</button>
+      <div id="ratioSum" style="margin-top:8px;font-size:13px;color:#666"></div>
+    </div>
+
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">保存</button>
       <button type="button" class="btn" onclick="hideTeamForm()">取消</button>
@@ -38,40 +61,73 @@ const body = `
 
 <div class="table-wrap">
   <table class="data-table">
-    <thead><tr><th>ID</th><th>团队名称</th><th>规则类型</th><th>规则配置</th><th>状态</th><th>操作</th></tr></thead>
+    <thead><tr><th>ID</th><th>团队名称</th><th>规则类型</th><th>分成说明</th><th>状态</th><th>操作</th></tr></thead>
     <tbody id="teamListBody"><tr><td colspan="6">加载中...</td></tr></tbody>
   </table>
 </div>
 `;
 const pageScript = `<script>
-const RULE_HINTS = {
-  zteam: '{"leader_name":"填入leader姓名","leader_ratio":0.2,"reimburse_expenses":true}',
-  standard: '{"leader_name":"张三","leader_ratio":0.2}',
-  custom: '{"allocations":[{"name":"张三","ratio":0.4},{"name":"李四","ratio":0.6}]}'
-};
-
 let teams = [];
+
+function describeRule(t) {
+  var cfg = t.rule_config || {};
+  if (t.rule_type === 'zteam') {
+    var r = cfg.leader_ratio != null ? (cfg.leader_ratio * 100).toFixed(0) : '?';
+    return (cfg.leader_name || '（未设置负责人）') + ' 拿' + r + '% + 报销支出；其余平分';
+  }
+  if (t.rule_type === 'standard') {
+    var r = cfg.leader_ratio != null ? (cfg.leader_ratio * 100).toFixed(0) : '?';
+    return (cfg.leader_name || '（未设置负责人）') + ' 拿' + r + '%；其余平分';
+  }
+  if (t.rule_type === 'custom') {
+    var allocs = cfg.allocations || [];
+    return allocs.map(function(a){ return a.name + ' ' + (a.ratio*100).toFixed(0) + '%'; }).join('，') || '（未配置）';
+  }
+  return '-';
+}
 
 async function loadTeams() {
   const res = await api('/api/teams');
   if (!res) return;
-  teams = res.data;
+  teams = res.data || [];
   document.getElementById('teamListBody').innerHTML = teams.map(t =>
     '<tr>' +
-    '<td>'+t.id+'</td>' +
-    '<td>'+t.name+'</td>' +
-    '<td><span class="badge">'+t.rule_type+'</span></td>' +
-    '<td><code style="font-size:12px">'+JSON.stringify(t.rule_config).slice(0,60)+'...</code></td>' +
-    '<td>'+(t.status ? '✅启用' : '🚫停用')+'</td>' +
-    '<td><button class="btn btn-sm" onclick="editTeam('+t.id+')">编辑</button></td>' +
+    '<td>' + t.id + '</td>' +
+    '<td><strong>' + t.name + '</strong></td>' +
+    '<td><span class="badge">' + t.rule_type + '</span></td>' +
+    '<td style="font-size:13px">' + describeRule(t) + '</td>' +
+    '<td>' + (t.status ? '✅启用' : '🚫停用') + '</td>' +
+    '<td><button class="btn btn-sm" onclick="editTeam(' + t.id + ')">编辑</button></td>' +
     '</tr>'
   ).join('') || '<tr><td colspan="6">暂无团队</td></tr>';
 }
 
 function onRuleChange() {
-  const type = document.getElementById('tRuleType').value;
-  document.getElementById('tRuleConfig').value = RULE_HINTS[type] || '{}';
-  document.getElementById('ruleHint').textContent = '参考模板已填入，请按需修改';
+  var type = document.getElementById('tRuleType').value;
+  document.getElementById('leaderFields').style.display = (type === 'custom') ? 'none' : 'block';
+  document.getElementById('reimburseRow').style.display = (type === 'zteam') ? 'block' : 'none';
+  document.getElementById('customFields').style.display = (type === 'custom') ? 'block' : 'none';
+}
+
+function addAllocation(name, ratio) {
+  var wrap = document.getElementById('allocationsWrap');
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
+  row.innerHTML = '<input type="text" placeholder="成员姓名" value="' + (name||'') + '" style="flex:2;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:14px" oninput="updateRatioSum()">' +
+    '<input type="number" placeholder="比例%" min="0" max="100" step="1" value="' + (ratio||'') + '" style="flex:1;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:14px" oninput="updateRatioSum()">' +
+    '<span style="font-size:13px;color:#888">%</span>' +
+    '<button type="button" onclick="this.parentNode.remove();updateRatioSum()" style="background:none;border:none;color:#f44;cursor:pointer;font-size:16px">✕</button>';
+  wrap.appendChild(row);
+  updateRatioSum();
+}
+
+function updateRatioSum() {
+  var inputs = document.querySelectorAll('#allocationsWrap input[type=number]');
+  var sum = 0;
+  inputs.forEach(function(inp){ sum += parseFloat(inp.value) || 0; });
+  var el = document.getElementById('ratioSum');
+  el.textContent = '当前合计：' + sum.toFixed(0) + '%' + (Math.abs(sum - 100) < 0.01 ? ' ✅' : ' （需调整至100%）');
+  el.style.color = Math.abs(sum - 100) < 0.01 ? '#4caf50' : '#f44336';
 }
 
 function showTeamForm(team) {
@@ -80,26 +136,63 @@ function showTeamForm(team) {
   document.getElementById('teamId').value = team ? team.id : '';
   document.getElementById('tName').value = team ? team.name : '';
   document.getElementById('tRuleType').value = team ? team.rule_type : 'zteam';
-  document.getElementById('tRuleConfig').value = team ? JSON.stringify(team.rule_config, null, 2) : RULE_HINTS.zteam;
   document.getElementById('teamFormErr').style.display = 'none';
+  document.getElementById('allocationsWrap').innerHTML = '';
+
+  var cfg = (team && team.rule_config) ? team.rule_config : {};
+  document.getElementById('tLeaderName').value = cfg.leader_name || '';
+  document.getElementById('tLeaderRatio').value = cfg.leader_ratio != null ? (cfg.leader_ratio * 100).toFixed(0) : '20';
+  document.getElementById('tReimburse').checked = cfg.reimburse_expenses !== false;
+
+  if (team && team.rule_type === 'custom') {
+    var allocs = cfg.allocations || [];
+    allocs.forEach(function(a){ addAllocation(a.name, (a.ratio * 100).toFixed(0)); });
+  }
+  onRuleChange();
 }
 
 function hideTeamForm() { document.getElementById('teamFormWrap').style.display = 'none'; }
-
 function editTeam(id) { showTeamForm(teams.find(t => t.id === id)); }
+
+function buildRuleConfig() {
+  var type = document.getElementById('tRuleType').value;
+  if (type === 'custom') {
+    var rows = document.querySelectorAll('#allocationsWrap > div');
+    var allocations = [];
+    rows.forEach(function(row) {
+      var inputs = row.querySelectorAll('input');
+      var name = inputs[0].value.trim();
+      var ratio = parseFloat(inputs[1].value) / 100;
+      if (name && !isNaN(ratio)) allocations.push({ name: name, ratio: ratio });
+    });
+    return { allocations: allocations };
+  }
+  var cfg = {
+    leader_name: document.getElementById('tLeaderName').value.trim(),
+    leader_ratio: parseFloat(document.getElementById('tLeaderRatio').value) / 100 || 0.2,
+  };
+  if (type === 'zteam') cfg.reimburse_expenses = document.getElementById('tReimburse').checked;
+  return cfg;
+}
 
 document.getElementById('teamForm').addEventListener('submit', async function(e) {
   e.preventDefault();
-  const id = document.getElementById('teamId').value;
-  const body = {
+  var id = document.getElementById('teamId').value;
+  var cfg = buildRuleConfig();
+  var body = {
     name: document.getElementById('tName').value,
     rule_type: document.getElementById('tRuleType').value,
-    rule_config: JSON.parse(document.getElementById('tRuleConfig').value || '{}')
+    rule_config: cfg,
   };
-  const method = id ? 'PUT' : 'POST';
-  const url = id ? '/api/teams/'+id : '/api/teams';
-  const res = await api(url, { method, body: JSON.stringify(body) });
+  var err = document.getElementById('teamFormErr');
+  err.style.display = 'none';
+  if (body.rule_type === 'custom') {
+    var sum = (cfg.allocations||[]).reduce(function(s,a){return s+a.ratio;},0);
+    if (Math.abs(sum - 1) > 0.01) { err.textContent = '各成员比例之和须为100%，当前：'+(sum*100).toFixed(0)+'%'; err.style.display='block'; return; }
+  }
+  var res = await api(id ? '/api/teams/'+id : '/api/teams', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
   if (res && res.ok) { hideTeamForm(); loadTeams(); }
+  else { err.textContent = (res&&res.message)||'保存失败'; err.style.display='block'; }
 });
 
 loadTeams();

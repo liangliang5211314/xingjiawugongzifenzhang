@@ -50,7 +50,9 @@ function updateUser(id, fields) {
 function upsertWechatUser({ openid, unionid, name }) {
   let user = findByOpenid(openid);
   if (user) {
-    updateUser(user.id, { name: name || user.name, unionid: unionid || user.unionid });
+    const updates = { unionid: unionid || user.unionid };
+    if (!user.name) updates.name = name; // 只在用户未手动设置姓名时才用微信昵称
+    updateUser(user.id, updates);
     return { user: findById(user.id), isNew: false };
   }
   user = createUser({ name: name || '', openid, unionid, role: 'member' });
