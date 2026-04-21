@@ -1,10 +1,15 @@
 const express = require('express');
 const morgan = require('morgan');
 const path = require('path');
+const { execSync } = require('child_process');
 const { version } = require('../package.json');
 const { apiRouter, authRouter, memberRouter } = require('./routes');
 const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
 const { authenticate } = require('./middleware/auth');
+
+let gitHash = '';
+try { gitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim(); } catch (e) {}
+const displayVersion = gitHash ? version + '-' + gitHash : version;
 
 const CHANGELOG = [
   { ver: '1.4.0', date: '2026-04-22', notes: '多团队支持；成员上报类型（京粉/淘宝/支出）；团队配置表单化；结算页显示成员收入预览；修复微信登录覆盖姓名问题' },
@@ -31,10 +36,10 @@ app.use('/auth', authRouter);
 app.use('/member', memberRouter);
 
 // 版本信息 API
-app.get('/api/version', (req, res) => res.json({ version, changelog: CHANGELOG }));
+app.get('/api/version', (req, res) => res.json({ version: displayVersion, changelog: CHANGELOG }));
 
 // 后台管理页面（服务端渲染）
-const adminRender = (view) => (req, res) => res.render(view, { appVersion: version });
+const adminRender = (view) => (req, res) => res.render(view, { appVersion: displayVersion });
 app.get('/', (req, res) => res.render('login'));
 app.get('/admin/dashboard',      adminRender('dashboard'));
 app.get('/admin/teams',          adminRender('teams'));
