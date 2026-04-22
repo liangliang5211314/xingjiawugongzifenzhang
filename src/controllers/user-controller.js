@@ -1,4 +1,5 @@
 const { getUsers, createMember, updateMember } = require('../services/user-service');
+const { deleteUserById } = require('../models/user-model');
 
 function listUsersController(req, res, next) {
   try {
@@ -17,4 +18,9 @@ function updateUserController(req, res, next) {
   catch (e) { next(e); }
 }
 
-module.exports = { listUsersController, createUserController, updateUserController };
+function deleteUserController(req, res, next) {
+  try { deleteUserById(Number(req.params.id)); res.json({ ok: true }); }
+  catch (e) { next(e); }
+}
+
+module.exports = { listUsersController, createUserController, updateUserController, deleteUserController };

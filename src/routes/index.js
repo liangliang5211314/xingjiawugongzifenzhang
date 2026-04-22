@@ -4,10 +4,10 @@ const express = require('express');
 const { authenticate, authorize } = require('../middleware/auth');
 
 const { loginController, meController, wechatStartController, wechatCallbackController } = require('../controllers/auth-controller');
-const { listTeamsController, createTeamController, updateTeamController } = require('../controllers/team-controller');
-const { listUsersController, createUserController, updateUserController } = require('../controllers/user-controller');
+const { listTeamsController, createTeamController, updateTeamController, deleteTeamController } = require('../controllers/team-controller');
+const { listUsersController, createUserController, updateUserController, deleteUserController } = require('../controllers/user-controller');
 const { listRecordsController, createRecordController, updateRecordController, deleteRecordController } = require('../controllers/record-controller');
-const { runSettlementController, listSettlementsController, pushSettlementController } = require('../controllers/settlement-controller');
+const { runSettlementController, listSettlementsController, pushSettlementController, deleteSettlementController } = require('../controllers/settlement-controller');
 const { syncRecordsController, syncSettlementController } = require('../controllers/feishu-controller');
 const { dashboardController } = require('../controllers/stats-controller');
 const { memberMeController, memberCurrentIncomeController, memberIncomeHistoryController, memberUpdateProfileController } = require('../controllers/member-h5-controller');
@@ -37,14 +37,16 @@ apiRouter.get('/me', authenticate, meController);
 apiRouter.get('/dashboard', authenticate, authorize('admin'), dashboardController);
 
 // 团队
-apiRouter.get('/teams',     authenticate, authorize('admin'), listTeamsController);
-apiRouter.post('/teams',    authenticate, authorize('admin'), createTeamController);
-apiRouter.put('/teams/:id', authenticate, authorize('admin'), updateTeamController);
+apiRouter.get('/teams',        authenticate, authorize('admin'), listTeamsController);
+apiRouter.post('/teams',       authenticate, authorize('admin'), createTeamController);
+apiRouter.put('/teams/:id',    authenticate, authorize('admin'), updateTeamController);
+apiRouter.delete('/teams/:id', authenticate, authorize('admin'), deleteTeamController);
 
 // 用户/成员
-apiRouter.get('/users',      authenticate, authorize('admin'), listUsersController);
-apiRouter.post('/users',     authenticate, authorize('admin'), createUserController);
-apiRouter.put('/users/:id',  authenticate, authorize('admin'), updateUserController);
+apiRouter.get('/users',        authenticate, authorize('admin'), listUsersController);
+apiRouter.post('/users',       authenticate, authorize('admin'), createUserController);
+apiRouter.put('/users/:id',    authenticate, authorize('admin'), updateUserController);
+apiRouter.delete('/users/:id', authenticate, authorize('admin'), deleteUserController);
 
 // 收入台账
 apiRouter.get('/records',        authenticate, authorize('admin'), listRecordsController);
@@ -53,9 +55,10 @@ apiRouter.put('/records/:id',    authenticate, authorize('admin'), updateRecordC
 apiRouter.delete('/records/:id', authenticate, authorize('admin'), deleteRecordController);
 
 // 结算
-apiRouter.post('/settlements/run',      authenticate, authorize('admin'), runSettlementController);
-apiRouter.get('/settlements',           authenticate, authorize('admin'), listSettlementsController);
-apiRouter.post('/settlements/:id/push', authenticate, authorize('admin'), pushSettlementController);
+apiRouter.post('/settlements/run',         authenticate, authorize('admin'), runSettlementController);
+apiRouter.get('/settlements',              authenticate, authorize('admin'), listSettlementsController);
+apiRouter.post('/settlements/:id/push',    authenticate, authorize('admin'), pushSettlementController);
+apiRouter.delete('/settlements/:id',       authenticate, authorize('admin'), deleteSettlementController);
 
 // 飞书同步
 apiRouter.post('/feishu/sync-records',    authenticate, authorize('admin'), syncRecordsController);

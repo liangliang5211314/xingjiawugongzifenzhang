@@ -86,7 +86,10 @@ async function loadAll() {
       '<td>' + teamNames + '</td>' +
       '<td>' + (u.openid ? '✅已绑定' : '⬜未绑定') + '</td>' +
       '<td>' + (u.status ? '正常' : '停用') + '</td>' +
-      '<td><button class="btn btn-sm" onclick="editUser(' + u.id + ')">编辑</button></td>' +
+      '<td>' +
+        '<button class="btn btn-sm" onclick="editUser(' + u.id + ')">编辑</button> ' +
+        '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteUser(' + u.id + ',\'' + (u.name||'').replace(/'/g,'') + '\')">删除</button>' +
+      '</td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="8">暂无成员</td></tr>';
 }
@@ -147,6 +150,12 @@ document.getElementById('userForm').addEventListener('submit', async function(e)
   if (res && res.ok) { hideUserForm(); loadAll(); }
   else { var err = document.getElementById('userFormErr'); err.textContent = (res&&res.message)||'保存失败'; err.style.display='block'; }
 });
+
+async function deleteUser(id, name) {
+  if (!confirm('确认删除成员「' + name + '」？此操作不可恢复。')) return;
+  var res = await api('/api/users/' + id, { method: 'DELETE' });
+  if (res && res.ok) loadAll();
+}
 
 loadAll();
 </script>`;

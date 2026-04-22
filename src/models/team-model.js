@@ -35,4 +35,8 @@ function updateTeam(id, { name, rule_type, rule_config, status }) {
   return getTeamById(id);
 }
 
-module.exports = { getAllTeams, getTeamById, getTeamByName, createTeam, updateTeam };
+function deleteTeamById(id) {
+  db.prepare('DELETE FROM teams WHERE id = ?').run(id);
+}
+
+module.exports = { getAllTeams, getTeamById, getTeamByName, createTeam, updateTeam, deleteTeamById };

@@ -1,4 +1,5 @@
 const { listTeams, createNewTeam, updateExistingTeam } = require('../services/team-service');
+const { deleteTeamById } = require('../models/team-model');
 
 function listTeamsController(req, res, next) {
   try { res.json({ ok: true, data: listTeams() }); }
@@ -15,4 +16,9 @@ function updateTeamController(req, res, next) {
   catch (e) { next(e); }
 }
 
-module.exports = { listTeamsController, createTeamController, updateTeamController };
+function deleteTeamController(req, res, next) {
+  try { deleteTeamById(Number(req.params.id)); res.json({ ok: true }); }
+  catch (e) { next(e); }
+}
+
+module.exports = { listTeamsController, createTeamController, updateTeamController, deleteTeamController };

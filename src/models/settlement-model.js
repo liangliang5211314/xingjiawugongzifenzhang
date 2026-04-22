@@ -50,4 +50,8 @@ function getMonthTotalIncome(teamId, month) {
   return row?.total_income ?? null;
 }
 
-module.exports = { getSettlement, getSettlementById, listSettlements, saveSettlement, markPushed, getMonthTotalIncome };
+function deleteSettlementById(id) {
+  db.prepare('DELETE FROM settlements WHERE id = ?').run(id);
+}
+
+module.exports = { getSettlement, getSettlementById, listSettlements, saveSettlement, markPushed, getMonthTotalIncome, deleteSettlementById };

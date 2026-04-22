@@ -1,5 +1,6 @@
 const { runSettlement, fetchSettlement, fetchSettlementById, getSettlements } = require('../services/settlement-service');
 const { pushSettlement } = require('../services/wechat-push-service');
+const { deleteSettlementById } = require('../models/settlement-model');
 
 function runSettlementController(req, res, next) {
   try {
@@ -23,4 +24,9 @@ async function pushSettlementController(req, res, next) {
   } catch (e) { next(e); }
 }
 
-module.exports = { runSettlementController, listSettlementsController, pushSettlementController };
+function deleteSettlementController(req, res, next) {
+  try { deleteSettlementById(Number(req.params.id)); res.json({ ok: true }); }
+  catch (e) { next(e); }
+}
+
+module.exports = { runSettlementController, listSettlementsController, pushSettlementController, deleteSettlementController };

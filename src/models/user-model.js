@@ -84,4 +84,9 @@ function upsertWechatUser({ openid, unionid, name }) {
   return { user, isNew: true };
 }
 
-module.exports = { findByUsername, findById, findByOpenid, getUserTeamIds, setUserTeams, listUsers, createUser, updateUser, upsertWechatUser };
+function deleteUserById(id) {
+  db.prepare('DELETE FROM user_teams WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+}
+
+module.exports = { findByUsername, findById, findByOpenid, getUserTeamIds, setUserTeams, listUsers, createUser, updateUser, upsertWechatUser, deleteUserById };

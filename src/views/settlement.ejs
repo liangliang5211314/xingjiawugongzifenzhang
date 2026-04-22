@@ -22,7 +22,10 @@ const body = `
 
   <!-- 成员收入预览 -->
   <div id="memberPreviewSection" style="display:none;margin-bottom:14px">
-    <div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#333">团队成员本月上报收入</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:14px;font-weight:600;color:#333">团队成员本月上报收入</div>
+      <a id="goRecordsBtn" href="/admin/records" style="font-size:13px;color:#6c63ff;text-decoration:none;padding:4px 10px;border:1px solid #6c63ff;border-radius:6px">前往录入页手动编辑</a>
+    </div>
     <div class="table-wrap" style="margin-bottom:0">
       <table class="data-table">
         <thead><tr><th>成员</th><th>京粉收入</th><th>淘宝收入</th><th>支出</th><th>上报合计</th><th>状态</th></tr></thead>
@@ -116,7 +119,7 @@ async function loadMemberPreview() {
   sec.style.display = 'block';
 
   var [ur, rr] = await Promise.all([
-    api('/api/users?team_id=' + teamId + '&role=member'),
+    api('/api/users?team_id=' + teamId),
     api('/api/member-reports?team_id=' + teamId + '&month=' + month),
   ]);
   var members = ur ? ur.data || [] : [];
@@ -134,7 +137,7 @@ async function loadMemberPreview() {
       '<td><strong>' + (u.name||'-') + '</strong></td>' +
       '<td>' + (jingfen ? '<span style="color:#6c63ff">¥' + parseFloat(jingfen.amount).toFixed(2) + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
       '<td>' + (taobao  ? '<span style="color:#6c63ff">¥' + parseFloat(taobao.amount).toFixed(2)  + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
-      '<td>' + (expTotal > 0 ? '<span style="color:#f44336">¥' + parseFloat(expTotal).toFixed(2) + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
+      '<td>' + (expTotal > 0 ? '<span style="color:#f44336">-¥' + parseFloat(expTotal).toFixed(2) + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
       '<td><strong>' + (hasReport ? '¥' + parseFloat(total).toFixed(2) : '-') + '</strong></td>' +
       '<td>' + (hasReport ? '<span style="color:#4caf50">✅已上报</span>' : '<span style="color:#f44336">⚠️未上报</span>') + '</td>' +
       '</tr>';
@@ -224,7 +227,10 @@ async function loadSettlements() {
       '<td>'+(s.year_compare_last  != null ? '¥'+(s.year_compare_last/100).toFixed(2) : '-')+'</td>' +
       '<td>'+(s.year_compare_prev2 != null ? '¥'+(s.year_compare_prev2/100).toFixed(2) : '-')+'</td>' +
       '<td>'+(s.pushed_at ? '✅'+s.pushed_at.slice(0,10) : '-')+'</td>' +
-      '<td><button class="btn btn-sm" onclick="viewSettle(this)" data-id="'+s.id+'">查看明细</button></td>' +
+      '<td>' +
+        '<button class="btn btn-sm" onclick="viewSettle(this)" data-id="'+s.id+'">查看明细</button> ' +
+        '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteSettle('+s.id+',\''+s.month+'\')">删除</button>' +
+      '</td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="8">暂无结算记录</td></tr>';
   window._settlements = list;
@@ -234,6 +240,12 @@ function viewSettle(btn) {
   const id = parseInt(btn.dataset.id);
   const s = (window._settlements||[]).find(function(x){return x.id===id;});
   if (s) showSettleResult(s);
+}
+
+async function deleteSettle(id, month) {
+  if (!confirm('确认删除 ' + month + ' 的结算记录？此操作不可恢复。')) return;
+  const res = await api('/api/settlements/' + id, { method: 'DELETE' });
+  if (res && res.ok) loadSettlements();
 }
 
 initPage();
