@@ -153,7 +153,7 @@ async function loadMemberPreview() {
     var net = incTotal - taxTotal - expTotal + adjTotal;
     var hasData = recs.length > 0;
 
-    function fmt(v) { return (v/100).toFixed(2); }
+    function fmt(v) { return parseFloat(v).toFixed(2); }
     return '<tr>' +
       '<td><strong>' + name + '</strong></td>' +
       '<td>' + (jingfen  ? '<span style="color:#6c63ff">¥' + fmt(jingfen) + '</span>'  : '<span style="color:#bbb">-</span>') + '</td>' +

@@ -47,13 +47,13 @@ function submitReportController(req, res, next) {
         .run(amountCents, note || null, existing.id);
     } else {
       createRecord({
-        teamId, month,
-        personName: user.name,
-        itemType: resolvedItemType,
-        itemName: resolvedItemName,
+        team_id: teamId, month,
+        person_name: user.name,
+        item_type: resolvedItemType,
+        item_name: resolvedItemName,
         amount: amountCents,
         note: note || null,
-        createdBy: user.id,
+        created_by: user.id,
       });
     }
 
