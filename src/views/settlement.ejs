@@ -91,21 +91,17 @@ function showTeamFormula() {
   var team = allTeams.find(function(t){ return t.id === teamId; });
   var box = document.getElementById('teamFormulaBox');
   if (!team) { box.style.display = 'none'; return; }
-  var cfg = team.rule_config || {};
+  var rm = team.rule_members || [];
   var html = '<strong>分成规则：</strong>';
-  if (team.rule_type === 'zteam') {
-    var leader = cfg.leader_name || '（未设置）';
-    var ratio  = cfg.leader_ratio != null ? (cfg.leader_ratio * 100).toFixed(0) + '%' : '?%';
-    html += 'Z团队 — <strong>' + leader + '</strong> 获得总收入×' + ratio + ' + 垫付支出；其余成员平分剩余';
-  } else if (team.rule_type === 'standard') {
-    var leader = cfg.leader_name || '（未设置）';
-    var ratio  = cfg.leader_ratio != null ? (cfg.leader_ratio * 100).toFixed(0) + '%' : '?%';
-    html += '标准 — <strong>' + leader + '</strong> 获得总收入×' + ratio + '；其余成员平分剩余';
-  } else if (team.rule_type === 'custom') {
-    var allocs = cfg.allocations || [];
-    html += '自定义：' + (allocs.length ? allocs.map(function(a){
-      return '<strong>' + a.name + '</strong> ' + (a.ratio * 100).toFixed(0) + '%';
-    }).join('，') : '（未配置）');
+  if (rm.length > 0) {
+    html += rm.map(function(m) {
+      var rule = m.rule_mode === 'formula'
+        ? '<code style="background:#e8ecff;padding:1px 5px;border-radius:3px">' + m.formula + '</code>'
+        : '<strong>' + (m.ratio != null ? (m.ratio * 100).toFixed(0) : '?') + '%</strong>';
+      return '<strong>' + m.member_name + '</strong> → ' + rule;
+    }).join('　　');
+  } else {
+    html += '<span style="color:#f44336">⚠️ 未配置成员分账公式，请先到团队管理页面设置</span>';
   }
   box.innerHTML = html;
   box.style.display = 'block';
