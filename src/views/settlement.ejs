@@ -28,7 +28,7 @@ const body = `
     </div>
     <div class="table-wrap" style="margin-bottom:0">
       <table class="data-table">
-        <thead><tr><th>成员</th><th>京粉收入</th><th>淘宝收入</th><th>支出</th><th>上报合计</th><th>状态</th></tr></thead>
+        <thead><tr><th>成员</th><th>京粉收入</th><th>淘宝收入</th><th>支出</th><th>净收入</th><th>状态</th></tr></thead>
         <tbody id="memberPreviewBody"></tbody>
       </table>
     </div>
@@ -118,30 +118,51 @@ async function loadMemberPreview() {
   if (!teamId || !month) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
 
+  var goBtn = document.getElementById('goRecordsBtn');
+  if (goBtn) goBtn.href = '/admin/records';
+
   var [ur, rr] = await Promise.all([
     api('/api/users?team_id=' + teamId),
-    api('/api/member-reports?team_id=' + teamId + '&month=' + month),
+    api('/api/records?team_id=' + teamId + '&month=' + month),
   ]);
   var members = ur ? ur.data || [] : [];
-  var reports = rr ? rr.data || [] : [];
+  var records = rr ? rr.data || [] : [];
 
-  document.getElementById('memberPreviewBody').innerHTML = members.map(function(u) {
-    var userReports = reports.filter(function(r){ return r.user_id === u.id; });
-    var jingfen  = userReports.find(function(r){ return r.item_name === '京粉收入' || r.item_name === '京粉收益'; });
-    var taobao   = userReports.find(function(r){ return r.item_name === '淘宝收入'; });
-    var expenses = userReports.filter(function(r){ return r.item_type === 'expense'; });
-    var expTotal = expenses.reduce(function(s,r){ return s + r.amount; }, 0);
-    var total    = userReports.filter(function(r){ return r.item_type === 'income'; }).reduce(function(s,r){ return s + r.amount; }, 0);
-    var hasReport = userReports.length > 0;
+  // 聚合每位成员的 income_records 数据
+  var memberNames = members.map(function(u){ return u.name; }).filter(Boolean);
+  // 也把 records 里出现但不在成员列表里的人名加进来
+  records.forEach(function(r){
+    if (r.person_name && memberNames.indexOf(r.person_name) === -1) memberNames.push(r.person_name);
+  });
+
+  document.getElementById('memberPreviewBody').innerHTML = memberNames.map(function(name) {
+    var recs = records.filter(function(r){ return r.person_name === name; });
+    var incomeRecs = recs.filter(function(r){ return r.item_type === 'income'; });
+    var expRecs    = recs.filter(function(r){ return r.item_type === 'expense'; });
+    var taxRecs    = recs.filter(function(r){ return r.item_type === 'tax'; });
+    var adjRecs    = recs.filter(function(r){ return r.item_type === 'adjust'; });
+
+    var jingfen = incomeRecs.filter(function(r){ return r.item_name && r.item_name.indexOf('京粉') !== -1; })
+                            .reduce(function(s,r){ return s + r.amount; }, 0);
+    var taobao  = incomeRecs.filter(function(r){ return r.item_name && r.item_name.indexOf('淘宝') !== -1; })
+                            .reduce(function(s,r){ return s + r.amount; }, 0);
+    var expTotal = expRecs.reduce(function(s,r){ return s + Math.abs(r.amount); }, 0);
+    var incTotal = incomeRecs.reduce(function(s,r){ return s + r.amount; }, 0);
+    var taxTotal = taxRecs.reduce(function(s,r){ return s + r.amount; }, 0);
+    var adjTotal = adjRecs.reduce(function(s,r){ return s + r.amount; }, 0);
+    var net = incTotal - taxTotal - expTotal + adjTotal;
+    var hasData = recs.length > 0;
+
+    function fmt(v) { return (v/100).toFixed(2); }
     return '<tr>' +
-      '<td><strong>' + (u.name||'-') + '</strong></td>' +
-      '<td>' + (jingfen ? '<span style="color:#6c63ff">¥' + parseFloat(jingfen.amount).toFixed(2) + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
-      '<td>' + (taobao  ? '<span style="color:#6c63ff">¥' + parseFloat(taobao.amount).toFixed(2)  + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
-      '<td>' + (expTotal > 0 ? '<span style="color:#f44336">-¥' + parseFloat(expTotal).toFixed(2) + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
-      '<td><strong>' + (hasReport ? '¥' + parseFloat(total).toFixed(2) : '-') + '</strong></td>' +
-      '<td>' + (hasReport ? '<span style="color:#4caf50">✅已上报</span>' : '<span style="color:#f44336">⚠️未上报</span>') + '</td>' +
+      '<td><strong>' + name + '</strong></td>' +
+      '<td>' + (jingfen  ? '<span style="color:#6c63ff">¥' + fmt(jingfen) + '</span>'  : '<span style="color:#bbb">-</span>') + '</td>' +
+      '<td>' + (taobao   ? '<span style="color:#6c63ff">¥' + fmt(taobao)  + '</span>'  : '<span style="color:#bbb">-</span>') + '</td>' +
+      '<td>' + (expTotal ? '<span style="color:#f44336">-¥' + fmt(expTotal) + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
+      '<td><strong>' + (hasData ? '¥' + fmt(net) : '-') + '</strong></td>' +
+      '<td>' + (hasData ? '<span style="color:#4caf50">✅已录入</span>' : '<span style="color:#f44336">⚠️未录入</span>') + '</td>' +
       '</tr>';
-  }).join('') || '<tr><td colspan="6" style="color:#999">该团队暂无成员</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="color:#999">该团队暂无成员或记录</td></tr>';
 }
 
 function onTeamMonthChange() {
