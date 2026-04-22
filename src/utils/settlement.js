@@ -1,5 +1,6 @@
 const { fromCents, roundShare } = require('./money');
 const { getRuleMembers } = require('../models/team-rule-member-model');
+const { HttpError } = require('./http-error');
 
 function evalFormula(formula, vars) {
   try {
@@ -142,41 +143,65 @@ function calculateSettlement(team, personNames, records) {
   const distributableCents = totalIncomeCents - totalTaxCents - totalExpenseCents + totalAdjustCents;
 
   let shouldGetMap;
+  // 最终参与分账的成员名单（公式模式下会扩充）
+  let finalPersonNames = [...personNames];
+
   const ruleMembers = team.id ? getRuleMembers(team.id) : [];
   if (ruleMembers.length > 0) {
-    // 新规则：team_rule_members 有配置则优先使用
-    shouldGetMap = calcFromRuleMembers(ruleMembers,
-      personNames,
-      { income: totalIncomeCents, tax: totalTaxCents, expense: totalExpenseCents,
-        adjust: totalAdjustCents, distributable: distributableCents }
-    );
-    // 垫付支出的人加回报销金额
-    records.filter(r => r.item_type === 'expense').forEach(r => {
-      const amt = Math.abs(r.amount);
-      shouldGetMap.set(r.person_name, (shouldGetMap.get(r.person_name) || 0) + amt);
+    // ── 成员公式模式 ──────────────────────────────────────────────
+    // 完全忽略 zteam / standard 旧逻辑，不做 expense 二次报销补偿
+    // 以 team_rule_members 为权威成员名单，补充进 finalPersonNames
+    ruleMembers.forEach(m => {
+      if (!finalPersonNames.includes(m.member_name)) finalPersonNames.push(m.member_name);
     });
+
+    const vars = {
+      income:       totalIncomeCents,
+      tax:          totalTaxCents,
+      expense:      totalExpenseCents,
+      adjust:       totalAdjustCents,
+      distributable: distributableCents,
+    };
+    shouldGetMap = calcFromRuleMembers(ruleMembers, finalPersonNames, vars);
+
+    // 校验1：所有成员 should_get 之和必须 ≈ total_income（允许 n 分舍入误差）
+    const totalShouldGet = [...shouldGetMap.values()].reduce((s, v) => s + v, 0);
+    if (Math.abs(totalShouldGet - totalIncomeCents) > finalPersonNames.length) {
+      throw new HttpError(400,
+        `成员公式分配总和 ¥${fromCents(totalShouldGet)} ≠ 总收入 ¥${fromCents(totalIncomeCents)}，请检查各成员公式`);
+    }
+
+    // 校验2：有公式但结果为 0，说明公式写错
+    const ruleMap = new Map(ruleMembers.map(m => [m.member_name, m]));
+    for (const [name, share] of shouldGetMap) {
+      const rm = ruleMap.get(name);
+      if (rm && rm.rule_mode === 'formula' && rm.formula && share === 0) {
+        throw new HttpError(400,
+          `成员「${name}」公式计算结果为 0，请确认公式正确：${rm.formula}`);
+      }
+    }
+
   } else if (team.rule_type === 'zteam') {
     // zteam: should_get 里已含 leader 报销；sum(should_get) = income - tax + adjust
-    shouldGetMap = calcZteam(team, personNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents);
+    shouldGetMap = calcZteam(team, finalPersonNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents);
   } else {
     // standard/custom: distributable 已扣除 expense；再逐条把 expense 还给实际垫付人
-    shouldGetMap = calcStandard(team, personNames, distributableCents);
+    shouldGetMap = calcStandard(team, finalPersonNames, distributableCents);
     records.filter(r => r.item_type === 'expense').forEach(r => {
       const amt = Math.abs(r.amount);
       shouldGetMap.set(r.person_name, (shouldGetMap.get(r.person_name) || 0) + amt);
     });
   }
 
-  // actual = 每人实收金额（income+、tax-、adjust±；expense不计入actual，通过should_get报销）
-  // 这样 sum(actual) = sum(should_get) 保证账面平衡
-  const actualMap = new Map(personNames.map(n => [n, 0]));
+  // actual = 每人实收（income+, tax-, adjust±；expense 不计入 actual）
+  const actualMap = new Map(finalPersonNames.map(n => [n, 0]));
   records.forEach(r => {
-    if (r.item_type === 'expense') return; // expense 不进 actual
+    if (r.item_type === 'expense') return;
     const sign = (r.item_type === 'income' || r.item_type === 'adjust') ? 1 : -1;
     actualMap.set(r.person_name, (actualMap.get(r.person_name) || 0) + sign * Math.abs(r.amount));
   });
 
-  const memberSettlements = personNames.map(name => {
+  const memberSettlements = finalPersonNames.map(name => {
     const shouldGet = shouldGetMap.get(name) || 0;
     const actual    = actualMap.get(name) || 0;
     const diff      = shouldGet - actual;
