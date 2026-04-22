@@ -125,7 +125,7 @@ async function loadTeams() {
       '<td>' + (t.status ? '✅启用' : '🚫停用') + '</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="editTeam(' + t.id + ')">编辑</button> ' +
-        '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteTeam(' + t.id + ',\'' + t.name + '\')">删除</button>' +
+        '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteTeam(' + t.id + ')">删除</button>' +
       '</td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="6">暂无团队</td></tr>';
@@ -380,7 +380,9 @@ document.getElementById('teamForm').addEventListener('submit', async function(e)
   else { err.textContent = (res&&res.message)||'保存失败'; err.style.display='block'; }
 });
 
-async function deleteTeam(id, name) {
+async function deleteTeam(id) {
+  var team = teams.find(function(t){ return t.id === id; });
+  var name = team ? team.name : '该团队';
   if (!confirm('确认删除团队「' + name + '」？此操作不可恢复。')) return;
   var res = await api('/api/teams/' + id, { method: 'DELETE' });
   if (res && res.ok) loadTeams();

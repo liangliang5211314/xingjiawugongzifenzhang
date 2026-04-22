@@ -88,7 +88,7 @@ async function loadAll() {
       '<td>' + (u.status ? '正常' : '停用') + '</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="editUser(' + u.id + ')">编辑</button> ' +
-        '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteUser(' + u.id + ',\'' + (u.name||'').replace(/'/g,'') + '\')">删除</button>' +
+        '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteUser(' + u.id + ')">删除</button>' +
       '</td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="8">暂无成员</td></tr>';
@@ -151,7 +151,9 @@ document.getElementById('userForm').addEventListener('submit', async function(e)
   else { var err = document.getElementById('userFormErr'); err.textContent = (res&&res.message)||'保存失败'; err.style.display='block'; }
 });
 
-async function deleteUser(id, name) {
+async function deleteUser(id) {
+  var user = users.find(function(u){ return u.id === id; });
+  var name = user ? (user.name || '该成员') : '该成员';
   if (!confirm('确认删除成员「' + name + '」？此操作不可恢复。')) return;
   var res = await api('/api/users/' + id, { method: 'DELETE' });
   if (res && res.ok) loadAll();

@@ -229,7 +229,7 @@ async function loadSettlements() {
       '<td>'+(s.pushed_at ? '✅'+s.pushed_at.slice(0,10) : '-')+'</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="viewSettle(this)" data-id="'+s.id+'">查看明细</button> ' +
-        '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteSettle('+s.id+',\''+s.month+'\')">删除</button>' +
+        '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteSettle('+s.id+')">删除</button>' +
       '</td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="8">暂无结算记录</td></tr>';
@@ -242,8 +242,10 @@ function viewSettle(btn) {
   if (s) showSettleResult(s);
 }
 
-async function deleteSettle(id, month) {
-  if (!confirm('确认删除 ' + month + ' 的结算记录？此操作不可恢复。')) return;
+async function deleteSettle(id) {
+  var s = (window._settlements||[]).find(function(x){ return x.id === id; });
+  var label = s ? (s.month + ' ' + (teamsMap[s.team_id]||'')) : '该记录';
+  if (!confirm('确认删除「' + label + '」的结算记录？此操作不可恢复。')) return;
   const res = await api('/api/settlements/' + id, { method: 'DELETE' });
   if (res && res.ok) loadSettlements();
 }
