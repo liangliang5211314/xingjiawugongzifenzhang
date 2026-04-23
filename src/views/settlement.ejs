@@ -73,8 +73,8 @@ const body = `
 <h3 style="margin:1.5rem 0 .5rem">历史结算记录</h3>
 <div class="table-wrap">
   <table class="data-table">
-    <thead><tr><th>月份</th><th>团队</th><th>总收入</th><th>总支出</th><th>去年同月</th><th>前年同月</th><th>推送</th><th>操作</th></tr></thead>
-    <tbody id="settleListBody"><tr><td colspan="8">加载中...</td></tr></tbody>
+    <thead><tr><th>月份</th><th>团队</th><th>总收入</th><th>总支出</th><th>去年同月</th><th>前年同月</th><th>前前年同月</th><th>推送</th><th>操作</th></tr></thead>
+    <tbody id="settleListBody"><tr><td colspan="9">加载中...</td></tr></tbody>
   </table>
 </div>
 `;
@@ -190,9 +190,16 @@ function showSettleResult(s) {
   document.getElementById('btnFeishu').dataset.month = s.month;
   const r = s.result_json || {};
   document.getElementById('settleTitle').textContent = (teamsMap[s.team_id]||s.team_id) + ' · ' + s.month + ' 结算结果';
+  var _curIncome = parseFloat(r.total_income || 0);
+  var _pct = function(ref) {
+    if (!ref || ref <= 0) return '';
+    var p = ((_curIncome - ref) / ref * 100).toFixed(1);
+    return '（' + (p >= 0 ? '+' : '') + p + '%）';
+  };
   document.getElementById('settleCompare').innerHTML = [
-    s.year_compare_last  != null ? '去年同月: ¥'+(s.year_compare_last/100).toFixed(2) : '',
-    s.year_compare_prev2 != null ? '前年同月: ¥'+(s.year_compare_prev2/100).toFixed(2) : '',
+    s.year_compare_last  != null ? '去年同月: ¥'+(s.year_compare_last/100).toFixed(2)+_pct(s.year_compare_last/100) : '',
+    s.year_compare_prev2 != null ? '前年同月: ¥'+(s.year_compare_prev2/100).toFixed(2)+_pct(s.year_compare_prev2/100) : '',
+    s.year_compare_prev3 != null ? '前前年同月: ¥'+(s.year_compare_prev3/100).toFixed(2)+_pct(s.year_compare_prev3/100) : '',
   ].filter(Boolean).join('　｜　');
   document.getElementById('settleSummary').innerHTML = [
     {label:'总收入', value:'¥'+(r.total_income||0)},
@@ -235,33 +242,26 @@ function generatePushText(s) {
   lines.push('可分配：¥' + fmt(r.distributable));
 
   // 同比
-  if (s.year_compare_last != null || s.year_compare_prev2 != null) {
+  if (s.year_compare_last != null || s.year_compare_prev2 != null || s.year_compare_prev3 != null) {
     lines.push(sep);
     lines.push('📊 同比对比');
     var parts = s.month.split('-');
     var yr = parts[0], mn = parts[1];
+    var curVal = parseFloat(r.total_income || 0);
+    var pctStr = function(refVal) {
+      return refVal > 0 ? '（同比 ' + (((curVal - refVal) / refVal * 100) >= 0 ? '+' : '') + ((curVal - refVal) / refVal * 100).toFixed(1) + '%）' : '';
+    };
     if (s.year_compare_last != null) {
-      var lastVal = s.year_compare_last / 100;
-      var curVal  = parseFloat(r.total_income || 0);
-      var pct = lastVal > 0 ? ((curVal - lastVal) / lastVal * 100).toFixed(1) : null;
-      var pctStr = pct != null ? '（同比 ' + (pct >= 0 ? '+' : '') + pct + '%）' : '';
-      lines.push('去年同月（' + (Number(yr) - 1) + '-' + mn + '）：¥' + lastVal.toFixed(2) + pctStr);
+      var v1 = s.year_compare_last / 100;
+      lines.push('去年同月（' + (Number(yr) - 1) + '-' + mn + '）：¥' + v1.toFixed(2) + pctStr(v1));
     }
     if (s.year_compare_prev2 != null) {
-      lines.push('前年同月（' + (Number(yr) - 2) + '-' + mn + '）：¥' + (s.year_compare_prev2 / 100).toFixed(2));
+      var v2 = s.year_compare_prev2 / 100;
+      lines.push('前年同月（' + (Number(yr) - 2) + '-' + mn + '）：¥' + v2.toFixed(2) + pctStr(v2));
     }
-  }
-
-  // 分账规则
-  if (team) {
-    var rm = team.rule_members || [];
-    if (rm.length > 0) {
-      lines.push(sep);
-      lines.push('📐 分账规则');
-      rm.forEach(function(m) {
-        var rule = m.rule_mode === 'formula' ? m.formula : ((m.ratio * 100).toFixed(0) + '%');
-        lines.push(m.member_name + '：' + rule);
-      });
+    if (s.year_compare_prev3 != null) {
+      var v3 = s.year_compare_prev3 / 100;
+      lines.push('前前年同月（' + (Number(yr) - 3) + '-' + mn + '）：¥' + v3.toFixed(2) + pctStr(v3));
     }
   }
 
@@ -337,13 +337,14 @@ async function loadSettlements() {
       '<td>¥'+(s.total_expense/100).toFixed(2)+'</td>' +
       '<td>'+(s.year_compare_last  != null ? '¥'+(s.year_compare_last/100).toFixed(2) : '-')+'</td>' +
       '<td>'+(s.year_compare_prev2 != null ? '¥'+(s.year_compare_prev2/100).toFixed(2) : '-')+'</td>' +
+      '<td>'+(s.year_compare_prev3 != null ? '¥'+(s.year_compare_prev3/100).toFixed(2) : '-')+'</td>' +
       '<td>'+(s.pushed_at ? '✅'+s.pushed_at.slice(0,10) : '-')+'</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="viewSettle(this)" data-id="'+s.id+'">查看明细</button> ' +
         '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteSettle('+s.id+')">删除</button>' +
       '</td>' +
       '</tr>';
-  }).join('') || '<tr><td colspan="8">暂无结算记录</td></tr>';
+  }).join('') || '<tr><td colspan="9">暂无结算记录</td></tr>';
   window._settlements = list;
 }
 

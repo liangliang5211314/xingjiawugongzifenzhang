@@ -10,13 +10,15 @@ function fetchYearCompare(teamId, month) {
   const [year, mon] = month.split('-');
   const lastYear  = `${Number(year) - 1}-${mon}`;
   const prev2Year = `${Number(year) - 2}-${mon}`;
+  const prev3Year = `${Number(year) - 3}-${mon}`;
 
   const fromSettlements = (m) => getMonthTotalIncome(teamId, m);
   const fromRecords = (m) => sumIncomeByTeamMonth(teamId, m);
 
   const last  = fromSettlements(lastYear)  ?? fromRecords(lastYear);
   const prev2 = fromSettlements(prev2Year) ?? fromRecords(prev2Year);
-  return { last, prev2 };
+  const prev3 = fromSettlements(prev3Year) ?? fromRecords(prev3Year);
+  return { last, prev2, prev3 };
 }
 
 function runSettlement(teamId, month) {
@@ -33,13 +35,14 @@ function runSettlement(teamId, month) {
   const totalIncomeCents  = records.filter(r => r.item_type === 'income').reduce((s, r) => s + r.amount, 0);
   const totalExpenseCents = records.filter(r => r.item_type === 'expense').reduce((s, r) => s + Math.abs(r.amount), 0);
 
-  const { last, prev2 } = fetchYearCompare(teamId, month);
+  const { last, prev2, prev3 } = fetchYearCompare(teamId, month);
 
   return saveSettlement(teamId, month, {
-    total_income:       totalIncomeCents,
-    total_expense:      totalExpenseCents,
-    year_compare_last:  last  ?? null,
-    year_compare_prev2: prev2 ?? null,
+    total_income:        totalIncomeCents,
+    total_expense:       totalExpenseCents,
+    year_compare_last:   last  ?? null,
+    year_compare_prev2:  prev2 ?? null,
+    year_compare_prev3:  prev3 ?? null,
     result,
   });
 }

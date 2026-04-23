@@ -22,19 +22,22 @@ function listSettlements({ teamId, month } = {}) {
   return db.prepare(sql).all(...params).map(mapRow);
 }
 
-function saveSettlement(teamId, month, { total_income, total_expense, year_compare_last, year_compare_prev2, result }) {
+function saveSettlement(teamId, month, { total_income, total_expense, year_compare_last, year_compare_prev2, year_compare_prev3, result }) {
+  // 动态加列（兼容旧数据库无该列的情况）
+  try { db.prepare('ALTER TABLE settlements ADD COLUMN year_compare_prev3 INTEGER').run(); } catch (_) {}
   db.prepare(`
-    INSERT INTO settlements (team_id, month, total_income, total_expense, year_compare_last, year_compare_prev2, result_json, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO settlements (team_id, month, total_income, total_expense, year_compare_last, year_compare_prev2, year_compare_prev3, result_json, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(team_id, month) DO UPDATE SET
-      total_income       = excluded.total_income,
-      total_expense      = excluded.total_expense,
-      year_compare_last  = excluded.year_compare_last,
-      year_compare_prev2 = excluded.year_compare_prev2,
-      result_json        = excluded.result_json,
-      updated_at         = CURRENT_TIMESTAMP
+      total_income        = excluded.total_income,
+      total_expense       = excluded.total_expense,
+      year_compare_last   = excluded.year_compare_last,
+      year_compare_prev2  = excluded.year_compare_prev2,
+      year_compare_prev3  = excluded.year_compare_prev3,
+      result_json         = excluded.result_json,
+      updated_at          = CURRENT_TIMESTAMP
   `).run(teamId, month, total_income, total_expense,
-    year_compare_last ?? null, year_compare_prev2 ?? null,
+    year_compare_last ?? null, year_compare_prev2 ?? null, year_compare_prev3 ?? null,
     JSON.stringify(result));
   return getSettlement(teamId, month);
 }
