@@ -20,7 +20,28 @@ function meController(req, res, next) {
 function wechatStartController(req, res) {
   const url = buildWechatAuthorizeUrl();
   if (!url) return res.status(500).json({ ok: false, message: '微信OAuth未配置' });
-  res.redirect(url);
+  // 渲染一个带标题的过渡页，让微信浏览器能显示正确的页面名称
+  res.send(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>性价屋分成结算系统</title>
+  <style>
+    body{margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}
+    .logo{font-size:22px;font-weight:700;color:#4a5aef;margin-bottom:12px}
+    .tip{font-size:14px;color:#888}
+    .spinner{width:32px;height:32px;border:3px solid #e0e4ff;border-top-color:#4a5aef;border-radius:50%;animation:spin .8s linear infinite;margin:20px auto 0}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <div class="logo">性价屋分成结算系统</div>
+  <div class="tip">正在跳转微信授权...</div>
+  <div class="spinner"></div>
+  <script>location.replace(${JSON.stringify(url)});</script>
+</body>
+</html>`);
 }
 
 async function wechatCallbackController(req, res, next) {
