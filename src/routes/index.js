@@ -7,7 +7,7 @@ const { loginController, meController, wechatStartController, wechatCallbackCont
 const { listTeamsController, createTeamController, updateTeamController, deleteTeamController } = require('../controllers/team-controller');
 const { listUsersController, createUserController, updateUserController, deleteUserController } = require('../controllers/user-controller');
 const { listRecordsController, createRecordController, updateRecordController, deleteRecordController } = require('../controllers/record-controller');
-const { runSettlementController, listSettlementsController, pushSettlementController, deleteSettlementController } = require('../controllers/settlement-controller');
+const { runSettlementController, listSettlementsController, pushSettlementController, deleteSettlementController, wecomPushController } = require('../controllers/settlement-controller');
 const { syncRecordsController, syncSettlementController } = require('../controllers/feishu-controller');
 const { dashboardController } = require('../controllers/stats-controller');
 const { memberMeController, memberCurrentIncomeController, memberIncomeHistoryController, memberUpdateProfileController } = require('../controllers/member-h5-controller');
@@ -57,8 +57,9 @@ apiRouter.delete('/records/:id', authenticate, authorize('admin'), deleteRecordC
 // 结算
 apiRouter.post('/settlements/run',         authenticate, authorize('admin'), runSettlementController);
 apiRouter.get('/settlements',              authenticate, authorize('admin'), listSettlementsController);
-apiRouter.post('/settlements/:id/push',    authenticate, authorize('admin'), pushSettlementController);
-apiRouter.delete('/settlements/:id',       authenticate, authorize('admin'), deleteSettlementController);
+apiRouter.post('/settlements/:id/push',       authenticate, authorize('admin'), pushSettlementController);
+apiRouter.post('/settlements/:id/wecom-push', authenticate, authorize('admin'), wecomPushController);
+apiRouter.delete('/settlements/:id',          authenticate, authorize('admin'), deleteSettlementController);
 
 // 飞书同步
 apiRouter.post('/feishu/sync-records',    authenticate, authorize('admin'), syncRecordsController);

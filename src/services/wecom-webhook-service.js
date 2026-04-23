@@ -150,4 +150,34 @@ async function push(team, settlement) {
   });
 }
 
-module.exports = { push, alreadyPushed };
+// 手动推送：跳过幂等检查，直接发送并记录日志；失败时 throw（由 controller 返回错误）
+async function pushForce(team, settlement) {
+  const webhookUrl = team.wecom_webhook_url;
+  if (!webhookUrl) throw new Error('未配置 Webhook URL');
+
+  const content = buildMarkdown(team, settlement);
+  const payload = { msgtype: 'markdown', markdown: { content } };
+
+  let responseText = '';
+  let status = 'fail';
+  try {
+    responseText = await httpPost(webhookUrl, payload);
+    const resp = JSON.parse(responseText);
+    status = (resp.errcode === 0) ? 'success' : 'fail';
+    if (status !== 'success') {
+      throw new Error(`企业微信返回错误：${responseText}`);
+    }
+    console.log(`[wecom] ✅ ${team.name} ${settlement.month} 手动推送成功`);
+  } finally {
+    logPush({
+      team_id: team.id,
+      month: settlement.month,
+      webhook_url: webhookUrl,
+      request_json: payload,
+      response_text: responseText,
+      status,
+    });
+  }
+}
+
+module.exports = { push, pushForce, alreadyPushed };

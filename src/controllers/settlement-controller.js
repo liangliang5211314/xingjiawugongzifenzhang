@@ -1,6 +1,8 @@
 const { runSettlement, fetchSettlement, fetchSettlementById, getSettlements } = require('../services/settlement-service');
 const { pushSettlement } = require('../services/wechat-push-service');
 const { deleteSettlementById } = require('../models/settlement-model');
+const wecomWebhookService = require('../services/wecom-webhook-service');
+const { getTeamById } = require('../models/team-model');
 
 function runSettlementController(req, res, next) {
   try {
@@ -29,4 +31,17 @@ function deleteSettlementController(req, res, next) {
   catch (e) { next(e); }
 }
 
-module.exports = { runSettlementController, listSettlementsController, pushSettlementController, deleteSettlementController };
+async function wecomPushController(req, res, next) {
+  try {
+    const settlement = fetchSettlementById(Number(req.params.id));
+    const team = getTeamById(settlement.team_id);
+    if (!team || !team.wecom_webhook_url) {
+      return res.status(400).json({ ok: false, message: '该团队未配置企业微信 Webhook，请先在团队管理中填写' });
+    }
+    // 手动推送忽略幂等（允许重复推送），直接调用底层推送
+    await wecomWebhookService.pushForce(team, settlement);
+    res.json({ ok: true, message: '推送成功' });
+  } catch (e) { next(e); }
+}
+
+module.exports = { runSettlementController, listSettlementsController, pushSettlementController, deleteSettlementController, wecomPushController };

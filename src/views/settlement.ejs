@@ -49,6 +49,7 @@ const body = `
     </div>
     <div class="settle-actions">
       <button class="btn btn-primary" id="btnPush" onclick="pushSettle()">📨 推送微信</button>
+      <button class="btn" id="btnWecom" onclick="wecomPush()" style="background:#07c160;color:#fff;border-color:#07c160">💬 推送企微</button>
       <button class="btn" id="btnFeishu" onclick="feishuSync()">🔄 同步飞书</button>
     </div>
   </div>
@@ -186,6 +187,7 @@ function showSettleResult(s) {
   document.getElementById('settleResult').style.display = 'block';
   document.getElementById('settleErr').style.display = 'none';
   document.getElementById('btnPush').dataset.id = s.id;
+  document.getElementById('btnWecom').dataset.id = s.id;
   document.getElementById('btnFeishu').dataset.team = s.team_id;
   document.getElementById('btnFeishu').dataset.month = s.month;
   const r = s.result_json || {};
@@ -334,6 +336,19 @@ function copyPushText(btn) {
   btn.textContent = '已复制 ✓';
   btn.style.background = '#4caf50';
   setTimeout(function() { btn.textContent = '复制'; btn.style.background = '#6c63ff'; }, 1800);
+}
+
+async function wecomPush() {
+  const id = document.getElementById('btnWecom').dataset.id;
+  if (!id) return alert('请先运行结算');
+  const btn = document.getElementById('btnWecom');
+  btn.disabled = true;
+  btn.textContent = '推送中...';
+  const res = await api('/api/settlements/'+id+'/wecom-push', { method:'POST' });
+  btn.disabled = false;
+  btn.textContent = '💬 推送企微';
+  if (res && res.ok) alert('企业微信推送成功！');
+  else alert('推送失败：' + ((res && res.message) || '请检查团队是否配置了 Webhook'));
 }
 
 async function pushSettle() {
