@@ -11,7 +11,8 @@ const body = `
   <select id="filterTeam" onchange="loadRecords()">
     <option value="">全部团队</option>
   </select>
-  <input type="month" id="filterMonth" onchange="loadRecords()" placeholder="筛选月份">
+  <input type="month" id="filterMonth" onchange="loadRecords()">
+  <button class="btn" onclick="clearMonthFilter()">全部时间</button>
   <button class="btn" onclick="loadRecords()">刷新</button>
 </div>
 
@@ -102,6 +103,13 @@ async function initPage() {
     else el.innerHTML = '<option value="">选择团队</option>' + opt;
   });
   document.getElementById('rMonth').value = new Date().toISOString().slice(0,7);
+  document.getElementById('filterMonth').value = new Date().toISOString().slice(0,7);
+  loadRecords();
+}
+
+function clearMonthFilter() {
+  document.getElementById('filterMonth').value = '';
+  loadRecords();
 }
 
 async function loadRecords() {

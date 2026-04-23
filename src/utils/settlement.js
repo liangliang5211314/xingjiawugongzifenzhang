@@ -53,6 +53,37 @@ function buildTransfers(memberSettlements) {
   return transfers;
 }
 
+// 按京粉账户聚合后生成转账方案
+// jdAccountMap: { 成员名 -> 京粉账户名 }，缺失项自动回退为成员名
+function buildTransfersByJdAccount(memberSettlements, jdAccountMap) {
+  const balanceMap = new Map();
+  memberSettlements.forEach(m => {
+    const account = (jdAccountMap && jdAccountMap[m.name]) || m.name;
+    balanceMap.set(account, (balanceMap.get(account) || 0) + m.diff_cents);
+  });
+
+  const debtors   = [];
+  const creditors = [];
+  for (const [account, balance] of balanceMap) {
+    if (balance < 0) debtors.push({ name: account, amount: Math.abs(balance) });
+    else if (balance > 0) creditors.push({ name: account, amount: balance });
+  }
+
+  const transfers = [];
+  let di = 0, ci = 0;
+  while (di < debtors.length && ci < creditors.length) {
+    const d = debtors[di];
+    const c = creditors[ci];
+    const amount = Math.min(d.amount, c.amount);
+    transfers.push({ from: d.name, to: c.name, amount: fromCents(amount) });
+    d.amount -= amount;
+    c.amount -= amount;
+    if (d.amount === 0) di++;
+    if (c.amount === 0) ci++;
+  }
+  return transfers;
+}
+
 function splitEvenly(totalCents, count) {
   if (count <= 0) return [];
   const base = Math.floor(totalCents / count);
@@ -133,7 +164,8 @@ function calcZteam(team, personNames, totalIncomeCents, totalTaxCents, totalExpe
  * @param {object[]} records - income_records 行，字段: person_name, item_type, amount
  * @returns {object} 结算结果
  */
-function calculateSettlement(team, personNames, records) {
+// jdAccountMap 可选：{ 成员名 -> 京粉账户名 }，用于按账户聚合转账方案
+function calculateSettlement(team, personNames, records, jdAccountMap) {
   const sum = (type) => records.filter(r => r.item_type === type).reduce((s, r) => s + r.amount, 0);
 
   const totalIncomeCents  = sum('income');
@@ -224,7 +256,9 @@ function calculateSettlement(team, personNames, records) {
     total_adjust:  fromCents(totalAdjustCents),
     distributable: fromCents(distributableCents),
     members:       memberSettlements.map(({ diff_cents, ...rest }) => rest),
-    transfers:     buildTransfers(memberSettlements),
+    transfers:     jdAccountMap
+      ? buildTransfersByJdAccount(memberSettlements, jdAccountMap)
+      : buildTransfers(memberSettlements),
   };
 }
 

@@ -67,6 +67,16 @@ const body = `
     <tbody id="teamListBody"><tr><td colspan="5">加载中...</td></tr></tbody>
   </table>
 </div>
+
+<div id="confirmMask" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;padding:28px 32px;max-width:340px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+    <div id="confirmMsg" style="font-size:15px;margin-bottom:20px;line-height:1.5"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button id="confirmCancel" class="btn">取消</button>
+      <button id="confirmOk" class="btn btn-primary" style="background:#f44336;border-color:#f44336">确认删除</button>
+    </div>
+  </div>
+</div>
 `;
 const pageScript = `<script>
 let teams = [];
@@ -226,12 +236,18 @@ document.getElementById('teamForm').addEventListener('submit', async function(e)
   else { err.textContent = (res&&res.message)||'保存失败'; err.style.display='block'; }
 });
 
-async function deleteTeam(id) {
+function deleteTeam(id) {
   var team = teams.find(function(t){ return t.id === id; });
   var name = team ? team.name : '该团队';
-  if (!confirm('确认删除团队「' + name + '」？此操作不可恢复。')) return;
-  var res = await api('/api/teams/' + id, { method: 'DELETE' });
-  if (res && res.ok) loadTeams();
+  var mask = document.getElementById('confirmMask');
+  document.getElementById('confirmMsg').textContent = '确认删除团队「' + name + '」？此操作不可恢复。';
+  mask.style.display = 'flex';
+  document.getElementById('confirmOk').onclick = async function() {
+    mask.style.display = 'none';
+    var res = await api('/api/teams/' + id, { method: 'DELETE' });
+    if (res && res.ok) loadTeams();
+  };
+  document.getElementById('confirmCancel').onclick = function() { mask.style.display = 'none'; };
 }
 
 loadTeams();

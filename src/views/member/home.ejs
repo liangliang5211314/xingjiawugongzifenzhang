@@ -388,12 +388,35 @@
       } else {
         document.getElementById('incomeCards').innerHTML = '<div class="m-empty">本月暂未结算</div>';
       }
+      document.getElementById('compareSection').style.display = 'none';
       var cmp = d.year_compare;
-      if (cmp && (cmp.last != null || cmp.prev2 != null)) {
+      var mcmp = d.member_compare;
+      var hasTeamCmp = cmp && (cmp.last != null || cmp.prev2 != null || cmp.prev3 != null);
+      var hasMemberCmp = mcmp && (mcmp.last != null || mcmp.prev2 != null || mcmp.prev3 != null);
+      if (hasTeamCmp || hasMemberCmp) {
         document.getElementById('compareSection').style.display = 'block';
+        var parts = (d.month || currentMonth).split('-');
+        var yr = Number(parts[0]), mn = parts[1];
+        function pct(cur, ref) {
+          if (ref == null || parseFloat(ref) <= 0) return '';
+          var p = ((parseFloat(cur) - parseFloat(ref)) / parseFloat(ref) * 100).toFixed(1);
+          return '（' + (p >= 0 ? '+' : '') + p + '%）';
+        }
         var cmpHtml = '';
-        if (cmp.last  != null) cmpHtml += '<div class="m-compare-item"><span>去年同月</span><strong>¥' + cmp.last  + '</strong></div>';
-        if (cmp.prev2 != null) cmpHtml += '<div class="m-compare-item"><span>前年同月</span><strong>¥' + cmp.prev2 + '</strong></div>';
+        var curTotal = d.total_income != null ? parseFloat(d.total_income) : null;
+        if (hasTeamCmp) {
+          cmpHtml += '<div class="m-compare-subtitle">团队总收入同比</div>';
+          if (cmp.last  != null) cmpHtml += '<div class="m-compare-item"><span>' + (yr-1) + '-' + mn + '</span><strong>¥' + cmp.last  + (curTotal != null ? pct(curTotal, cmp.last)  : '') + '</strong></div>';
+          if (cmp.prev2 != null) cmpHtml += '<div class="m-compare-item"><span>' + (yr-2) + '-' + mn + '</span><strong>¥' + cmp.prev2 + (curTotal != null ? pct(curTotal, cmp.prev2) : '') + '</strong></div>';
+          if (cmp.prev3 != null) cmpHtml += '<div class="m-compare-item"><span>' + (yr-3) + '-' + mn + '</span><strong>¥' + cmp.prev3 + (curTotal != null ? pct(curTotal, cmp.prev3) : '') + '</strong></div>';
+        }
+        if (hasMemberCmp && s) {
+          cmpHtml += '<div class="m-compare-subtitle" style="margin-top:10px">我的收入同比</div>';
+          var curMy = parseFloat(s.should_get || 0);
+          if (mcmp.last  != null) cmpHtml += '<div class="m-compare-item"><span>' + (yr-1) + '-' + mn + '</span><strong>¥' + mcmp.last  + pct(curMy, mcmp.last)  + '</strong></div>';
+          if (mcmp.prev2 != null) cmpHtml += '<div class="m-compare-item"><span>' + (yr-2) + '-' + mn + '</span><strong>¥' + mcmp.prev2 + pct(curMy, mcmp.prev2) + '</strong></div>';
+          if (mcmp.prev3 != null) cmpHtml += '<div class="m-compare-item"><span>' + (yr-3) + '-' + mn + '</span><strong>¥' + mcmp.prev3 + pct(curMy, mcmp.prev3) + '</strong></div>';
+        }
         document.getElementById('compareContent').innerHTML = cmpHtml;
       }
       var TYPES = { income:'收入', tax:'退税', expense:'支出', adjust:'调整' };

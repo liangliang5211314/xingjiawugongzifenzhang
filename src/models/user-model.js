@@ -29,7 +29,7 @@ function setUserTeams(userId, teamIds) {
 function listUsers({ teamId, role } = {}) {
   let sql = `
     SELECT u.id, u.name, u.mobile, u.username, u.role, u.openid, u.team_id, u.status,
-           u.jingfen_mobile, u.jingfen_password, u.jingfen_realname, u.created_at, u.updated_at,
+           u.jingfen_mobile, u.jingfen_password, u.jingfen_realname, u.jd_account, u.created_at, u.updated_at,
            (SELECT GROUP_CONCAT(ut.team_id) FROM user_teams ut WHERE ut.user_id = u.id) as team_ids_str
     FROM users u WHERE 1=1
   `;
@@ -59,7 +59,7 @@ function createUser({ name, mobile, username, password_hash, role, openid, union
 }
 
 function updateUser(id, fields) {
-  const allowed = ['name', 'mobile', 'username', 'password_hash', 'role', 'openid', 'unionid', 'team_id', 'status', 'jingfen_mobile', 'jingfen_password', 'jingfen_realname'];
+  const allowed = ['name', 'mobile', 'username', 'password_hash', 'role', 'openid', 'unionid', 'team_id', 'status', 'jingfen_mobile', 'jingfen_password', 'jingfen_realname', 'jd_account'];
   const sets = [];
   const vals = [];
   for (const [k, v] of Object.entries(fields)) {

@@ -1,4 +1,5 @@
 const { getTeamById } = require('../models/team-model');
+const { listUsers } = require('../models/user-model');
 const { getRecordsByTeamAndMonth, sumIncomeByTeamMonth, sumIncomeByPersonMonth, getPersonNames } = require('../models/record-model');
 const { getSettlement, getSettlementById, listSettlements, saveSettlement, markPushed, getMonthTotalIncome } = require('../models/settlement-model');
 const { HttpError } = require('../utils/http-error');
@@ -29,7 +30,13 @@ function runSettlement(teamId, month) {
   if (records.length === 0) throw new HttpError(400, '该团队该月没有数据，请先录入');
 
   const personNames = [...new Set(records.map(r => r.person_name))];
-  const result = calculateSettlement(team, personNames, records);
+
+  // 构建京粉账户映射：成员名 -> jd_account（无则回退为成员名，行为与原来完全一致）
+  const users = listUsers({ teamId });
+  const jdAccountMap = {};
+  users.forEach(u => { if (u.name) jdAccountMap[u.name] = u.jd_account || u.name; });
+
+  const result = calculateSettlement(team, personNames, records, jdAccountMap);
   result.month = month;
 
   const totalIncomeCents  = records.filter(r => r.item_type === 'income').reduce((s, r) => s + r.amount, 0);

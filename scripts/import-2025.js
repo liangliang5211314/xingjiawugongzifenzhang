@@ -15,7 +15,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 5335.07 },
       { name: '崔海亮', amount: 5737.81 },
-      { name: '崔小易', amount: 8989.19 },
+      { name: '崔如意', amount: 8989.19 },
     ],
   },
   {
@@ -23,7 +23,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 4400.60 },
       { name: '崔海亮', amount: 6423.88 },
-      { name: '崔小易', amount: 10413.06 },
+      { name: '崔如意', amount: 10413.06 },
       { name: '某宝',   amount: 412.89,  itemName: '淘宝收益' },
     ],
   },
@@ -33,11 +33,11 @@ const HISTORY = [
       // 第一批（常规）
       { name: '崔紫阳', amount: 2031.48,  itemName: '京东收益（3月第一批）' },
       { name: '崔海亮', amount: 2701.83,  itemName: '京东收益（3月第一批）' },
-      { name: '崔小易', amount: 4593.00,  itemName: '京东收益（3月第一批）' },
+      { name: '崔如意', amount: 4593.00,  itemName: '京东收益（3月第一批）' },
       // 第二批（报税批次）
       { name: '崔紫阳', amount: 10564.64, itemName: '京东收益（3月报税）' },
       { name: '崔海亮', amount: 4444.07,  itemName: '京东收益（3月报税）' },
-      { name: '崔小易', amount: 11705.12, itemName: '京东收益（3月报税）' },
+      { name: '崔如意', amount: 11705.12, itemName: '京东收益（3月报税）' },
     ],
   },
   {
@@ -45,7 +45,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 2706.72 },
       { name: '崔海亮', amount: 3741.26 },
-      { name: '崔小易', amount: 6293.04 },
+      { name: '崔如意', amount: 6293.04 },
     ],
   },
   {
@@ -53,7 +53,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 2530.17 },
       { name: '崔海亮', amount: 3014.82 },
-      { name: '崔小易', amount: 4868.36 },
+      { name: '崔如意', amount: 4868.36 },
       { name: '某宝',   amount: 204.15,  itemName: '淘宝收益' },
     ],
   },
@@ -62,7 +62,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 2886.06 },
       { name: '崔海亮', amount: 4051.96 },
-      { name: '崔小易', amount: 6182.21 },
+      { name: '崔如意', amount: 6182.21 },
     ],
   },
   {
@@ -70,7 +70,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 5507.20 },
       { name: '崔海亮', amount: 5278.38 },
-      { name: '崔小易', amount: 7827.37 },
+      { name: '崔如意', amount: 7827.37 },
     ],
   },
   {
@@ -78,7 +78,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 2915.59 },
       { name: '崔海亮', amount: 3090.26 },
-      { name: '崔小易', amount: 4960.92 },
+      { name: '崔如意', amount: 4960.92 },
       { name: '某宝',   amount: 355.72,  itemName: '淘宝收益' },
     ],
   },
@@ -87,7 +87,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 2090.22 },
       { name: '崔海亮', amount: 2743.77 },
-      { name: '崔小易', amount: 3946.24 },
+      { name: '崔如意', amount: 3946.24 },
       { name: '某宝',   amount: 338.49,  itemName: '淘宝收益' },
     ],
   },
@@ -96,7 +96,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 2734.90 },
       { name: '崔海亮', amount: 4155.70 },
-      { name: '崔小易', amount: 6115.62 },
+      { name: '崔如意', amount: 6115.62 },
     ],
   },
   {
@@ -104,7 +104,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 6131.51 },
       { name: '崔海亮', amount: 6252.85 },
-      { name: '崔小易', amount: 9254.58 },
+      { name: '崔如意', amount: 9254.58 },
     ],
   },
   {
@@ -112,7 +112,7 @@ const HISTORY = [
     records: [
       { name: '崔紫阳', amount: 6622.98 },
       { name: '崔海亮', amount: 6744.96 },
-      { name: '崔小易', amount: 9812.69 },
+      { name: '崔如意', amount: 9812.69 },
       { name: '某宝',   amount: -2093.00, itemType: 'expense', itemName: '淘宝退款/扣款' },
     ],
   },

@@ -65,6 +65,7 @@ function runMigrations() {
     addColumnIfMissing('users', 'jingfen_mobile TEXT');
     addColumnIfMissing('users', 'jingfen_password TEXT');
     addColumnIfMissing('users', 'jingfen_realname TEXT');
+    addColumnIfMissing('users', 'jd_account TEXT');
   }
 
   // 将旧records表数据迁移到income_records

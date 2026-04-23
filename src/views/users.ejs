@@ -39,6 +39,10 @@ const body = `
       <input type="password" id="uPassword" placeholder="新密码">
     </div>
     <div class="form-row">
+      <label>京粉账户（收款账户名）</label>
+      <input type="text" id="uJdAccount" placeholder="留空则与姓名相同，如：张三他妈">
+    </div>
+    <div class="form-row">
       <label>京粉实名人</label>
       <input type="text" id="uJfRealname" placeholder="京粉账号实名人姓名">
     </div>
@@ -118,6 +122,7 @@ function showUserForm(user) {
   document.getElementById('uRole').value = user ? user.role : 'member';
   document.getElementById('uUsername').value = user ? user.username||'' : '';
   document.getElementById('uPassword').value = '';
+  document.getElementById('uJdAccount').value = user ? user.jd_account||'' : '';
   document.getElementById('uJfRealname').value = user ? user.jingfen_realname||'' : '';
   document.getElementById('uJfMobile').value = user ? user.jingfen_mobile||'' : '';
   document.getElementById('uJfPwd').value = '';
@@ -137,6 +142,7 @@ document.getElementById('userForm').addEventListener('submit', async function(e)
     role:             document.getElementById('uRole').value,
     username:         document.getElementById('uUsername').value || null,
     team_ids:         Array.from(checked).map(function(cb){ return Number(cb.value); }),
+    jd_account:       document.getElementById('uJdAccount').value || null,
     jingfen_realname: document.getElementById('uJfRealname').value || null,
     jingfen_mobile:   document.getElementById('uJfMobile').value || null,
   };

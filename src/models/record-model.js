@@ -9,7 +9,7 @@ function listRecords({ teamId, month } = {}) {
   const params = [];
   if (teamId) { sql += ' AND team_id = ?'; params.push(teamId); }
   if (month)  { sql += ' AND month = ?';   params.push(month); }
-  sql += ' ORDER BY month DESC, id ASC';
+  sql += ' ORDER BY created_at DESC, id DESC';
   return db.prepare(sql).all(...params);
 }
 

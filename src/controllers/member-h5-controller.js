@@ -32,11 +32,20 @@ function memberCurrentIncomeController(req, res, next) {
       .map(r => ({ ...r, amount: fromCents(r.amount) }));
     const [settlement] = listSettlements({ teamId, month }) || [];
     const mySettlement = settlement?.result_json?.members?.find(m => m.name === user.name) || null;
+    const memberCompareMap = settlement?.result_json?.member_compare || {};
+    const myCompare = memberCompareMap[user.name] || {};
     res.json({ ok: true, data: {
       month, records: mine, settlement: mySettlement,
+      total_income: settlement?.total_income != null ? fromCents(settlement.total_income) : null,
       year_compare: {
         last:  settlement?.year_compare_last  != null ? fromCents(settlement.year_compare_last)  : null,
         prev2: settlement?.year_compare_prev2 != null ? fromCents(settlement.year_compare_prev2) : null,
+        prev3: settlement?.year_compare_prev3 != null ? fromCents(settlement.year_compare_prev3) : null,
+      },
+      member_compare: {
+        last:  myCompare.last  != null ? fromCents(myCompare.last)  : null,
+        prev2: myCompare.prev2 != null ? fromCents(myCompare.prev2) : null,
+        prev3: myCompare.prev3 != null ? fromCents(myCompare.prev3) : null,
       },
     }});
   } catch (e) { next(e); }
