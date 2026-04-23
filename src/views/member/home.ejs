@@ -213,6 +213,7 @@
       currentTeamId = id;
       var team = userTeams.find(function(t) { return t.id === id; });
       document.getElementById('teamName').textContent = team ? team.name : '-';
+      renderLeaderEntry();
       if (userTeams.length > 1) renderTeamTabs();
       loadAll();
     }
@@ -355,20 +356,22 @@
       if (!me || !me.ok) return;
       currentUser = me.data.user;
       userTeams = me.data.teams || [];
-      renderLeaderEntry();
       document.getElementById('userName').textContent = currentUser.name || '未设置姓名';
       if (userTeams.length === 0) {
         document.getElementById('teamName').textContent = '未绑定团队';
         currentTeamId = null;
+        renderLeaderEntry();
         document.getElementById('incomeCards').innerHTML = '<div class="m-empty">未绑定团队，请联系管理员</div>';
         document.getElementById('recordList').innerHTML = '';
       } else if (userTeams.length === 1) {
         currentTeamId = userTeams[0].id;
         document.getElementById('teamName').textContent = userTeams[0].name;
+        renderLeaderEntry();
         loadAll();
       } else {
         currentTeamId = userTeams[0].id;
         document.getElementById('teamName').textContent = userTeams[0].name;
+        renderLeaderEntry();
         renderTeamTabs();
         loadAll();
       }
@@ -382,18 +385,24 @@
 
     function renderLeaderEntry() {
       var card = document.getElementById('leaderEntryCard');
-      if (!currentUser || (!currentUser.is_team_leader && currentUser.role !== 'admin')) {
+      var managed = currentUser && Array.isArray(currentUser.managed_team_ids)
+        ? currentUser.managed_team_ids.map(function(id) { return Number(id); })
+        : [];
+      if (!currentTeamId || managed.indexOf(Number(currentTeamId)) === -1) {
         card.style.display = 'none';
+        localStorage.removeItem('admin_token');
         return;
       }
       card.style.display = 'block';
     }
 
     function enterLeaderAdmin() {
-      if (!token) return;
+      var managed = currentUser && Array.isArray(currentUser.managed_team_ids)
+        ? currentUser.managed_team_ids
+        : [];
+      if (!token || !currentTeamId || managed.indexOf(Number(currentTeamId)) === -1) return;
       localStorage.setItem('admin_token', token);
-      if (currentUser && currentUser.role === 'admin') location.href = '/admin/dashboard';
-      else location.href = '/admin/teams';
+      location.href = '/admin/teams';
     }
 
     async function loadIncome() {
