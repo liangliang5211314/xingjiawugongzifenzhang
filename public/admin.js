@@ -1,21 +1,20 @@
-// 获取 JWT token
+let __sessionPromise = null;
+
 function getToken() {
   return localStorage.getItem('admin_token');
 }
 
-// 退出登录
 function logout() {
   localStorage.removeItem('admin_token');
+  __sessionPromise = null;
   location.href = '/';
 }
 
-// 侧边栏切换
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebarOverlay').classList.toggle('show');
 }
 
-// 统一 fetch 封装，自动带 JWT 和错误提示
 async function api(url, options = {}) {
   const token = getToken();
   if (!token && !url.includes('/login')) {
@@ -53,7 +52,6 @@ async function api(url, options = {}) {
   }
 }
 
-// 全局错误提示
 function showError(msg) {
   const errEls = document.querySelectorAll('.error-msg');
   const visible = [...errEls].find(function(el) { return el.style.display !== 'none'; });
@@ -73,8 +71,33 @@ function showError(msg) {
   alert('错误: ' + msg);
 }
 
-// 进入页面时检查登录状态，登录页不检查
+function getCurrentSession() {
+  if (!getToken()) return Promise.resolve(null);
+  if (!__sessionPromise) {
+    __sessionPromise = api('/api/me').then(function(res) {
+      return res && res.ok ? res.data : null;
+    });
+  }
+  return __sessionPromise;
+}
+
+async function applyAdminShellPermissions() {
+  if (location.pathname === '/' || location.pathname === '/login') return;
+  const session = await getCurrentSession();
+  if (!session || !session.user) return;
+
+  const isAdmin = session.user.role === 'admin';
+  const dashboardLink = document.querySelector('a[href="/admin/dashboard"]');
+  if (dashboardLink && !isAdmin) {
+    dashboardLink.parentElement.style.display = 'none';
+  }
+}
+
 (function checkAuth() {
   if (location.pathname === '/' || location.pathname === '/login') return;
-  if (!getToken()) location.href = '/';
+  if (!getToken()) {
+    location.href = '/';
+    return;
+  }
+  applyAdminShellPermissions();
 })();

@@ -13,17 +13,25 @@ function getSettlementById(id) {
   return mapRow(db.prepare('SELECT * FROM settlements WHERE id = ?').get(id));
 }
 
-function listSettlements({ teamId, month } = {}) {
+function listSettlements({ teamId, teamIds, month } = {}) {
   let sql = 'SELECT * FROM settlements WHERE 1=1';
   const params = [];
-  if (teamId) { sql += ' AND team_id = ?'; params.push(teamId); }
-  if (month)  { sql += ' AND month = ?';   params.push(month); }
+  if (Array.isArray(teamIds) && teamIds.length > 0) {
+    sql += ` AND team_id IN (${teamIds.map(() => '?').join(', ')})`;
+    params.push(...teamIds);
+  } else if (teamId) {
+    sql += ' AND team_id = ?';
+    params.push(teamId);
+  }
+  if (month) {
+    sql += ' AND month = ?';
+    params.push(month);
+  }
   sql += ' ORDER BY month DESC, team_id ASC';
   return db.prepare(sql).all(...params).map(mapRow);
 }
 
 function saveSettlement(teamId, month, { total_income, total_expense, year_compare_last, year_compare_prev2, year_compare_prev3, result }) {
-  // 动态加列（兼容旧数据库无该列的情况）
   try { db.prepare('ALTER TABLE settlements ADD COLUMN year_compare_prev3 INTEGER').run(); } catch (_) {}
   db.prepare(`
     INSERT INTO settlements (team_id, month, total_income, total_expense, year_compare_last, year_compare_prev2, year_compare_prev3, result_json, updated_at)
@@ -36,9 +44,16 @@ function saveSettlement(teamId, month, { total_income, total_expense, year_compa
       year_compare_prev3  = excluded.year_compare_prev3,
       result_json         = excluded.result_json,
       updated_at          = CURRENT_TIMESTAMP
-  `).run(teamId, month, total_income, total_expense,
-    year_compare_last ?? null, year_compare_prev2 ?? null, year_compare_prev3 ?? null,
-    JSON.stringify(result));
+  `).run(
+    teamId,
+    month,
+    total_income,
+    total_expense,
+    year_compare_last ?? null,
+    year_compare_prev2 ?? null,
+    year_compare_prev3 ?? null,
+    JSON.stringify(result)
+  );
   return getSettlement(teamId, month);
 }
 
@@ -47,7 +62,6 @@ function markPushed(id) {
   return getSettlementById(id);
 }
 
-// 查询某月总收入（用于年同比，优先从settlements读）
 function getMonthTotalIncome(teamId, month) {
   const row = db.prepare('SELECT total_income FROM settlements WHERE team_id = ? AND month = ?').get(teamId, month);
   return row?.total_income ?? null;

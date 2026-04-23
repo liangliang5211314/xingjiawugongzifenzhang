@@ -16,6 +16,14 @@ const body = `
       <input type="text" id="tName" required placeholder="如：性价屋Z团队">
     </div>
 
+    <div class="form-row" id="leaderRow" style="display:none">
+      <label>团队队长</label>
+      <select id="tLeader">
+        <option value="">未设置</option>
+      </select>
+      <div style="font-size:12px;color:#999;margin-top:6px">只有管理员可以设定队长；队长可管理自己负责团队的信息、成员、录入、结算和推送。</div>
+    </div>
+
     <div style="border:1px solid #c8d8ff;border-radius:8px;padding:14px;margin-top:12px;background:#f8f9ff">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-size:14px;font-weight:600;color:#333">成员分账配置</span>
@@ -27,29 +35,34 @@ const body = `
       </div>
       <div style="background:#eef2ff;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#555;line-height:2">
         <span style="color:#888;margin-right:6px">公式可用变量（点击复制）：</span>
-        <span onclick="copyVar('income')"        style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">income</span><span style="color:#aaa;font-size:11px">总收入</span>
-        <span onclick="copyVar('tax')"           style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">tax</span><span style="color:#aaa;font-size:11px">税额</span>
-        <span onclick="copyVar('expense')"       style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">expense</span><span style="color:#aaa;font-size:11px">支出</span>
-        <span onclick="copyVar('adjust')"        style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">adjust</span><span style="color:#aaa;font-size:11px">调整</span>
-        <span onclick="copyVar('distributable')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">distributable</span><span style="color:#aaa;font-size:11px">可分配=收入-税-支出+调整</span>
+        <span onclick="copyVar('income')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">income</span><span style="color:#aaa;font-size:11px">总收入</span>
+        <span onclick="copyVar('tax')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">tax</span><span style="color:#aaa;font-size:11px">税额</span>
+        <span onclick="copyVar('expense')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">expense</span><span style="color:#aaa;font-size:11px">支出</span>
+        <span onclick="copyVar('adjust')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">adjust</span><span style="color:#aaa;font-size:11px">调整</span>
+        <span onclick="copyVar('distributable')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">distributable</span><span style="color:#aaa;font-size:11px">可分配收入</span>
         <span id="copyHint" style="color:#4caf50;margin-left:6px;display:none">已复制</span>
       </div>
       <div id="ruleMembersWrap"></div>
     </div>
 
     <div style="border:1px solid #e0e0e0;border-radius:8px;padding:14px;margin-top:12px;background:#fafafa">
-      <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:10px">⚙️ 企业微信自动化</div>
+      <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:10px">自动结算与推送</div>
       <div class="form-row">
         <label>企业微信 Webhook URL</label>
         <input type="text" id="tWecomWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
       </div>
-      <div style="display:flex;gap:24px;margin-top:10px">
+      <div style="display:flex;gap:24px;margin-top:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer">
-          <input type="checkbox" id="tAutoSettle"> 全员提交后自动结算
+          <input type="checkbox" id="tAutoSettle"> 指定成员提交完成后自动结算
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer">
-          <input type="checkbox" id="tAutoPush"> 结算完自动推送企业微信
+          <input type="checkbox" id="tAutoPush"> 结算完成后自动推送企业微信
         </label>
+      </div>
+      <div style="margin-top:12px">
+        <div style="font-size:13px;color:#555;margin-bottom:8px">需要提交上报的成员</div>
+        <div style="font-size:12px;color:#999;margin-bottom:8px">只勾选需要填写月度上报的成员；全部勾选时等同于原来的“全员提交后自动结算”。</div>
+        <div id="reportMembersWrap"></div>
       </div>
     </div>
 
@@ -63,8 +76,8 @@ const body = `
 
 <div class="table-wrap">
   <table class="data-table">
-    <thead><tr><th>ID</th><th>团队名称</th><th>成员分账配置</th><th>状态</th><th>操作</th></tr></thead>
-    <tbody id="teamListBody"><tr><td colspan="5">加载中...</td></tr></tbody>
+    <thead><tr><th>ID</th><th>团队名称</th><th>队长</th><th>成员分账配置</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody id="teamListBody"><tr><td colspan="6">加载中...</td></tr></tbody>
   </table>
 </div>
 
@@ -81,40 +94,87 @@ const body = `
 const pageScript = `<script>
 let teams = [];
 let currentFormMembers = [];
+let currentMe = null;
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function describeRule(t) {
   var rm = t.rule_members || [];
   if (rm.length > 0) {
     return rm.map(function(m) {
-      if (m.rule_mode === 'formula') return m.member_name + '：' + (m.formula || '-');
-      return m.member_name + '：' + (m.ratio != null ? (m.ratio * 100).toFixed(0) + '%' : '-');
-    }).join('　');
+      if (m.rule_mode === 'formula') return escapeHtml(m.member_name) + '：' + escapeHtml(m.formula || '-');
+      return escapeHtml(m.member_name) + '：' + (m.ratio != null ? (m.ratio * 100).toFixed(0) + '%' : '-');
+    }).join('；');
   }
   return '<span style="color:#aaa">未配置</span>';
 }
 
+function getLeaderName(team) {
+  if (!team.leader_user_id) return '-';
+  var member = currentFormMembers.find(function(m) { return m.id === team.leader_user_id; });
+  if (member && member.name) return member.name;
+  var users = window.__teamUsersMap && window.__teamUsersMap[team.id];
+  if (Array.isArray(users)) {
+    var found = users.find(function(u) { return u.id === team.leader_user_id; });
+    if (found && found.name) return found.name;
+  }
+  return 'ID ' + team.leader_user_id;
+}
+
 async function loadTeams() {
-  const res = await api('/api/teams');
-  if (!res) return;
-  teams = res.data || [];
+  const [meRes, teamRes, userRes] = await Promise.all([
+    api('/api/me'),
+    api('/api/teams'),
+    api('/api/users')
+  ]);
+  currentMe = meRes && meRes.ok ? meRes.data : null;
+  teams = teamRes && teamRes.ok ? (teamRes.data || []) : [];
+  var users = userRes && userRes.ok ? (userRes.data || []) : [];
+  window.__teamUsersMap = {};
+  users.forEach(function(u) {
+    (u.team_ids || []).forEach(function(teamId) {
+      if (!window.__teamUsersMap[teamId]) window.__teamUsersMap[teamId] = [];
+      window.__teamUsersMap[teamId].push(u);
+    });
+  });
+
   document.getElementById('teamListBody').innerHTML = teams.map(function(t) {
     return '<tr>' +
       '<td>' + t.id + '</td>' +
-      '<td><strong>' + t.name + '</strong></td>' +
+      '<td><strong>' + escapeHtml(t.name) + '</strong></td>' +
+      '<td>' + escapeHtml(getLeaderName(t)) + '</td>' +
       '<td style="font-size:13px">' + describeRule(t) + '</td>' +
-      '<td>' + (t.status ? '✅启用' : '🚫停用') + '</td>' +
+      '<td>' + (t.status ? '启用' : '停用') + '</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="editTeam(' + t.id + ')">编辑</button> ' +
-        '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteTeam(' + t.id + ')">删除</button>' +
+        (currentMe && currentMe.user && currentMe.user.role === 'admin'
+          ? '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteTeam(' + t.id + ')">删除</button>'
+          : '') +
       '</td>' +
       '</tr>';
-  }).join('') || '<tr><td colspan="5">暂无团队</td></tr>';
+  }).join('') || '<tr><td colspan="6">暂无团队</td></tr>';
+
+  var createBtn = document.querySelector('.page-header .btn-primary');
+  if (createBtn && currentMe && currentMe.user && currentMe.user.role !== 'admin') {
+    createBtn.style.display = 'none';
+  }
 }
 
 function copyVar(v) {
   navigator.clipboard.writeText(v).catch(function() {
     var ta = document.createElement('textarea');
-    ta.value = v; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    ta.value = v;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
   });
   var hint = document.getElementById('copyHint');
   hint.textContent = '已复制 ' + v;
@@ -135,18 +195,53 @@ function renderRuleMembers(members, savedRuleMembers) {
     var rm = ruleMap[m.name] || {};
     var mode = rm.rule_mode || 'formula';
     var val = mode === 'formula' ? (rm.formula || '') : (rm.ratio != null ? (rm.ratio * 100).toFixed(0) : '');
-    return '<div class="rm-row" data-name="' + m.name + '" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">' +
-      '<span style="flex:2;font-size:14px">' + m.name + '</span>' +
+    return '<div class="rm-row" data-name="' + escapeHtml(m.name) + '" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">' +
+      '<span style="flex:2;font-size:14px">' + escapeHtml(m.name) + '</span>' +
       '<select class="rm-mode" onchange="onRmModeChange(this)" style="flex:1;border:1px solid #ddd;border-radius:6px;padding:7px 8px;font-size:13px">' +
         '<option value="formula"' + (mode === 'formula' ? ' selected' : '') + '>公式</option>' +
-        '<option value="ratio"'   + (mode === 'ratio'   ? ' selected' : '') + '>固定比例</option>' +
+        '<option value="ratio"' + (mode === 'ratio' ? ' selected' : '') + '>固定比例</option>' +
       '</select>' +
-      '<input class="rm-val" type="text" value="' + val + '" ' +
-        'placeholder="' + (mode === 'ratio' ? '如：20（%）' : '如：income*0.2') + '" ' +
-        'style="flex:3;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:14px">' +
+      '<input class="rm-val" type="text" value="' + escapeHtml(val) + '" placeholder="' + (mode === 'ratio' ? '如：20' : '如：income*0.2') + '" style="flex:3;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:14px">' +
       '<span class="rm-unit" style="font-size:13px;color:#888;min-width:16px">' + (mode === 'ratio' ? '%' : '') + '</span>' +
     '</div>';
   }).join('');
+}
+
+function renderReportMembers(members, selectedNames) {
+  var wrap = document.getElementById('reportMembersWrap');
+  if (members.length === 0) {
+    wrap.innerHTML = '<div style="color:#aaa;font-size:13px">请先给该团队分配成员后，再选择哪些成员需要上报</div>';
+    return;
+  }
+  var selected = Array.isArray(selectedNames) && selectedNames.length > 0
+    ? selectedNames.slice()
+    : members.map(function(m) { return m.name; });
+
+  wrap.innerHTML = members.map(function(m) {
+    var checked = selected.indexOf(m.name) !== -1 ? ' checked' : '';
+    return '<label style="display:inline-flex;align-items:center;gap:6px;margin:0 12px 10px 0;padding:6px 10px;border:1px solid #ddd;border-radius:6px;cursor:pointer;background:#fff">' +
+      '<input type="checkbox" class="report-member" value="' + escapeHtml(m.name) + '"' + checked + '> ' +
+      '<span>' + escapeHtml(m.name) + '</span>' +
+    '</label>';
+  }).join('');
+}
+
+function renderLeaderOptions(members, selectedUserId) {
+  var row = document.getElementById('leaderRow');
+  var select = document.getElementById('tLeader');
+  var isAdmin = currentMe && currentMe.user && currentMe.user.role === 'admin';
+  row.style.display = isAdmin ? 'block' : 'none';
+  if (!isAdmin) return;
+
+  select.innerHTML = '<option value="">未设置</option>' + members.map(function(m) {
+    return '<option value="' + m.id + '"' + (Number(selectedUserId) === Number(m.id) ? ' selected' : '') + '>' + escapeHtml(m.name || ('用户' + m.id)) + '</option>';
+  }).join('');
+}
+
+function collectReportMembers() {
+  return Array.from(document.querySelectorAll('#reportMembersWrap .report-member:checked')).map(function(cb) {
+    return cb.value;
+  });
 }
 
 function onRmModeChange(sel) {
@@ -155,7 +250,7 @@ function onRmModeChange(sel) {
   var unit = row.querySelector('.rm-unit');
   var mode = sel.value;
   inp.value = '';
-  inp.placeholder = mode === 'ratio' ? '如：20（%）' : '如：income*0.2';
+  inp.placeholder = mode === 'ratio' ? '如：20' : '如：income*0.2';
   unit.textContent = mode === 'ratio' ? '%' : '';
 }
 
@@ -194,14 +289,14 @@ async function showTeamForm(team) {
   currentFormMembers = [];
   if (team && team.id) {
     var res = await api('/api/users?team_id=' + team.id);
-    currentFormMembers = (res ? res.data || [] : []).filter(function(m){ return m.name; });
+    currentFormMembers = (res && res.ok ? res.data || [] : []).filter(function(m) { return m.name; });
   }
 
   var tagsEl = document.getElementById('memberTags');
   var tagListEl = document.getElementById('memberTagList');
   if (currentFormMembers.length > 0) {
     tagListEl.innerHTML = currentFormMembers.map(function(m) {
-      return '<span style="display:inline-block;background:#f0f0f0;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px">' + m.name + '</span>';
+      return '<span style="display:inline-block;background:#f0f0f0;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px">' + escapeHtml(m.name) + '</span>';
     }).join('');
     tagsEl.style.display = 'block';
   } else {
@@ -209,35 +304,56 @@ async function showTeamForm(team) {
   }
 
   renderRuleMembers(currentFormMembers, team ? (team.rule_members || []) : []);
+  renderReportMembers(currentFormMembers, team ? (team.report_member_names || []) : []);
+  renderLeaderOptions(currentFormMembers, team ? team.leader_user_id : null);
   document.getElementById('teamFormWrap').scrollIntoView({ behavior: 'smooth' });
 }
 
-function hideTeamForm() { document.getElementById('teamFormWrap').style.display = 'none'; }
-function editTeam(id) { showTeamForm(teams.find(function(t){ return t.id === id; })); }
+function hideTeamForm() {
+  document.getElementById('teamFormWrap').style.display = 'none';
+}
+
+function editTeam(id) {
+  showTeamForm(teams.find(function(t) { return t.id === id; }));
+}
 
 document.getElementById('teamForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   var id = document.getElementById('teamId').value;
   var err = document.getElementById('teamFormErr');
   err.style.display = 'none';
+
   var body = {
-    name:               document.getElementById('tName').value,
-    rule_type:          'custom',
-    rule_config:        { allocations: [] },
-    rule_members:       collectRuleMembers(),
-    wecom_webhook_url:  document.getElementById('tWecomWebhook').value.trim() || null,
+    name: document.getElementById('tName').value,
+    rule_type: 'custom',
+    rule_config: { allocations: [] },
+    rule_members: collectRuleMembers(),
+    report_member_names: collectReportMembers(),
+    wecom_webhook_url: document.getElementById('tWecomWebhook').value.trim() || null,
     auto_settle_enabled: document.getElementById('tAutoSettle').checked ? 1 : 0,
-    auto_push_enabled:   document.getElementById('tAutoPush').checked   ? 1 : 0,
+    auto_push_enabled: document.getElementById('tAutoPush').checked ? 1 : 0
   };
-  var res = await api(id ? '/api/teams/'+id : '/api/teams', {
-    method: id ? 'PUT' : 'POST', body: JSON.stringify(body)
+
+  if (currentMe && currentMe.user && currentMe.user.role === 'admin') {
+    body.leader_user_id = document.getElementById('tLeader').value ? Number(document.getElementById('tLeader').value) : null;
+  }
+
+  var res = await api(id ? '/api/teams/' + id : '/api/teams', {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(body)
   });
-  if (res && res.ok) { hideTeamForm(); loadTeams(); }
-  else { err.textContent = (res&&res.message)||'保存失败'; err.style.display='block'; }
+
+  if (res && res.ok) {
+    hideTeamForm();
+    loadTeams();
+  } else {
+    err.textContent = (res && res.message) || '保存失败';
+    err.style.display = 'block';
+  }
 });
 
 function deleteTeam(id) {
-  var team = teams.find(function(t){ return t.id === id; });
+  var team = teams.find(function(t) { return t.id === id; });
   var name = team ? team.name : '该团队';
   var mask = document.getElementById('confirmMask');
   document.getElementById('confirmMsg').textContent = '确认删除团队「' + name + '」？该团队所有收入记录和结算数据将一并删除，不可恢复。';
@@ -248,7 +364,9 @@ function deleteTeam(id) {
     if (res && res.ok) loadTeams();
     else alert('删除失败：' + ((res && res.message) || '未知错误'));
   };
-  document.getElementById('confirmCancel').onclick = function() { mask.style.display = 'none'; };
+  document.getElementById('confirmCancel').onclick = function() {
+    mask.style.display = 'none';
+  };
 }
 
 loadTeams();

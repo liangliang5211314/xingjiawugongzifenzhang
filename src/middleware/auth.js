@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { env } = require('../config/env');
+const { getTeamsByLeaderUserId } = require('../models/team-model');
 const { HttpError } = require('../utils/http-error');
 
 function authenticate(req, res, next) {
@@ -12,9 +13,12 @@ function authenticate(req, res, next) {
 
   try {
     req.user = jwt.verify(token, env.jwtSecret);
+    const managedTeamIds = getTeamsByLeaderUserId(req.user.id).map(t => t.id);
+    req.user.managed_team_ids = managedTeamIds;
+    req.user.is_team_leader = managedTeamIds.length > 0;
     return next();
   } catch {
-    return next(new HttpError(401, 'Token无效或已过期'));
+    return next(new HttpError(401, 'Token 无效或已过期'));
   }
 }
 
@@ -26,18 +30,21 @@ function authorize(...roles) {
   };
 }
 
-// 成员只能访问自己所属团队；admin可访问所有
-function ensureTeamAccess(req, res, next) {
-  if (req.user.role === 'admin') return next();
-
-  const teamId = Number(
-    req.params.teamId || req.query.team_id || req.body?.team_id
-  );
-
-  if (!teamId || teamId !== Number(req.user.team_id)) {
-    return next(new HttpError(403, '只能访问自己所属的团队'));
-  }
-  return next();
+function authorizeAdminOrLeader(req, res, next) {
+  if (!req.user) return next(new HttpError(401, '需要登录'));
+  if (req.user.role === 'admin' || req.user.is_team_leader) return next();
+  return next(new HttpError(403, '权限不足'));
 }
 
-module.exports = { authenticate, authorize, ensureTeamAccess };
+function canManageTeam(user, teamId) {
+  if (!teamId) return false;
+  if (user.role === 'admin') return true;
+  return Array.isArray(user.managed_team_ids) && user.managed_team_ids.includes(Number(teamId));
+}
+
+function assertCanManageTeam(user, teamId) {
+  if (canManageTeam(user, teamId)) return;
+  throw new HttpError(403, '只能操作自己负责的团队');
+}
+
+module.exports = { authenticate, authorize, authorizeAdminOrLeader, canManageTeam, assertCanManageTeam };

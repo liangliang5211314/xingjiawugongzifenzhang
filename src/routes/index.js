@@ -1,7 +1,7 @@
 const path = require('path');
 const multer = require('multer');
 const express = require('express');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, authorizeAdminOrLeader } = require('../middleware/auth');
 
 const { loginController, meController, wechatStartController, wechatCallbackController } = require('../controllers/auth-controller');
 const { listTeamsController, createTeamController, updateTeamController, deleteTeamController } = require('../controllers/team-controller');
@@ -13,8 +13,8 @@ const { dashboardController } = require('../controllers/stats-controller');
 const { memberMeController, memberCurrentIncomeController, memberIncomeHistoryController, memberUpdateProfileController } = require('../controllers/member-h5-controller');
 const { submitReportController, getMyReportController, listReportsController } = require('../controllers/member-report-controller');
 const { listPushLogs } = require('../models/push-log-model');
+const { getSettlementById } = require('../models/settlement-model');
 
-// 图片上传配置（保存到 public/uploads/）
 const upload = multer({
   storage: multer.diskStorage({
     destination: path.join(__dirname, '..', '..', 'public', 'uploads'),
@@ -23,65 +23,66 @@ const upload = multer({
       cb(null, Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext);
     },
   }),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     cb(null, file.mimetype.startsWith('image/'));
   },
 });
 
-// ─── 管理端 API ────────────────────────────────────────────────
 const apiRouter = express.Router();
 
 apiRouter.post('/login', loginController);
 apiRouter.get('/me', authenticate, meController);
 apiRouter.get('/dashboard', authenticate, authorize('admin'), dashboardController);
 
-// 团队
-apiRouter.get('/teams',        authenticate, authorize('admin'), listTeamsController);
-apiRouter.post('/teams',       authenticate, authorize('admin'), createTeamController);
-apiRouter.put('/teams/:id',    authenticate, authorize('admin'), updateTeamController);
-apiRouter.delete('/teams/:id', authenticate, authorize('admin'), deleteTeamController);
+apiRouter.get('/teams',        authenticate, authorizeAdminOrLeader, listTeamsController);
+apiRouter.post('/teams',       authenticate, authorizeAdminOrLeader, createTeamController);
+apiRouter.put('/teams/:id',    authenticate, authorizeAdminOrLeader, updateTeamController);
+apiRouter.delete('/teams/:id', authenticate, authorizeAdminOrLeader, deleteTeamController);
 
-// 用户/成员
-apiRouter.get('/users',        authenticate, authorize('admin'), listUsersController);
-apiRouter.post('/users',       authenticate, authorize('admin'), createUserController);
-apiRouter.put('/users/:id',    authenticate, authorize('admin'), updateUserController);
-apiRouter.delete('/users/:id', authenticate, authorize('admin'), deleteUserController);
+apiRouter.get('/users',        authenticate, authorizeAdminOrLeader, listUsersController);
+apiRouter.post('/users',       authenticate, authorizeAdminOrLeader, createUserController);
+apiRouter.put('/users/:id',    authenticate, authorizeAdminOrLeader, updateUserController);
+apiRouter.delete('/users/:id', authenticate, authorizeAdminOrLeader, deleteUserController);
 
-// 收入台账
-apiRouter.get('/records',        authenticate, authorize('admin'), listRecordsController);
-apiRouter.post('/records',       authenticate, authorize('admin'), createRecordController);
-apiRouter.put('/records/:id',    authenticate, authorize('admin'), updateRecordController);
-apiRouter.delete('/records/:id', authenticate, authorize('admin'), deleteRecordController);
+apiRouter.get('/records',        authenticate, authorizeAdminOrLeader, listRecordsController);
+apiRouter.post('/records',       authenticate, authorizeAdminOrLeader, createRecordController);
+apiRouter.put('/records/:id',    authenticate, authorizeAdminOrLeader, updateRecordController);
+apiRouter.delete('/records/:id', authenticate, authorizeAdminOrLeader, deleteRecordController);
 
-// 结算
-apiRouter.post('/settlements/run',         authenticate, authorize('admin'), runSettlementController);
-apiRouter.get('/settlements',              authenticate, authorize('admin'), listSettlementsController);
-apiRouter.post('/settlements/:id/push',       authenticate, authorize('admin'), pushSettlementController);
-apiRouter.post('/settlements/:id/wecom-push', authenticate, authorize('admin'), wecomPushController);
-apiRouter.delete('/settlements/:id',          authenticate, authorize('admin'), deleteSettlementController);
+apiRouter.post('/settlements/run',            authenticate, authorizeAdminOrLeader, runSettlementController);
+apiRouter.get('/settlements',                 authenticate, authorizeAdminOrLeader, listSettlementsController);
+apiRouter.post('/settlements/:id/push',       authenticate, authorizeAdminOrLeader, pushSettlementController);
+apiRouter.post('/settlements/:id/wecom-push', authenticate, authorizeAdminOrLeader, wecomPushController);
+apiRouter.delete('/settlements/:id',          authenticate, authorizeAdminOrLeader, deleteSettlementController);
 
-// 飞书同步
-apiRouter.post('/feishu/sync-records',    authenticate, authorize('admin'), syncRecordsController);
-apiRouter.post('/feishu/sync-settlement', authenticate, authorize('admin'), syncSettlementController);
+apiRouter.post('/feishu/sync-records',    authenticate, authorizeAdminOrLeader, syncRecordsController);
+apiRouter.post('/feishu/sync-settlement', authenticate, authorizeAdminOrLeader, syncSettlementController);
 
-// 成员上报（管理员查看）
-apiRouter.get('/member-reports', authenticate, authorize('admin'), listReportsController);
+apiRouter.get('/member-reports', authenticate, authorizeAdminOrLeader, listReportsController);
 
-// 推送日志
-apiRouter.get('/push-logs', authenticate, authorize('admin'), (req, res, next) => {
+apiRouter.get('/push-logs', authenticate, authorizeAdminOrLeader, (req, res, next) => {
   try {
-    const logs = listPushLogs({ settlementId: req.query.settlement_id ? Number(req.query.settlement_id) : undefined });
+    const settlementId = req.query.settlement_id ? Number(req.query.settlement_id) : undefined;
+    let teamIds;
+    if (req.user.role !== 'admin') {
+      if (settlementId) {
+        const settlement = getSettlementById(settlementId);
+        if (!settlement || !req.user.managed_team_ids.includes(settlement.team_id)) {
+          return res.status(403).json({ ok: false, message: '只能查看自己负责团队的推送日志' });
+        }
+      }
+      teamIds = req.user.managed_team_ids;
+    }
+    const logs = listPushLogs({ settlementId, teamIds });
     res.json({ ok: true, data: logs });
   } catch (e) { next(e); }
 });
 
-// ─── 微信授权路由 ────────────────────────────────────────────────
 const authRouter = express.Router();
-authRouter.get('/wechat/start',    wechatStartController);
+authRouter.get('/wechat/start', wechatStartController);
 authRouter.get('/wechat/callback', wechatCallbackController);
 
-// ─── 成员H5 API ────────────────────────────────────────────────
 const memberRouter = express.Router();
 memberRouter.get('/me',             authenticate, memberMeController);
 memberRouter.put('/profile',        authenticate, memberUpdateProfileController);

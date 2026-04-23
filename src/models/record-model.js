@@ -4,11 +4,20 @@ function getRecordById(id) {
   return db.prepare('SELECT * FROM income_records WHERE id = ?').get(id);
 }
 
-function listRecords({ teamId, month } = {}) {
+function listRecords({ teamId, teamIds, month } = {}) {
   let sql = 'SELECT * FROM income_records WHERE 1=1';
   const params = [];
-  if (teamId) { sql += ' AND team_id = ?'; params.push(teamId); }
-  if (month)  { sql += ' AND month = ?';   params.push(month); }
+  if (Array.isArray(teamIds) && teamIds.length > 0) {
+    sql += ` AND team_id IN (${teamIds.map(() => '?').join(', ')})`;
+    params.push(...teamIds);
+  } else if (teamId) {
+    sql += ' AND team_id = ?';
+    params.push(teamId);
+  }
+  if (month) {
+    sql += ' AND month = ?';
+    params.push(month);
+  }
   sql += ' ORDER BY created_at DESC, id DESC';
   return db.prepare(sql).all(...params);
 }
@@ -32,7 +41,10 @@ function updateRecord(id, fields) {
   const sets = ['updated_at = CURRENT_TIMESTAMP'];
   const vals = [];
   for (const [k, v] of Object.entries(fields)) {
-    if (allowed.includes(k)) { sets.push(`${k} = ?`); vals.push(v); }
+    if (allowed.includes(k)) {
+      sets.push(`${k} = ?`);
+      vals.push(v);
+    }
   }
   vals.push(id);
   db.prepare(`UPDATE income_records SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
@@ -43,7 +55,6 @@ function deleteRecord(id) {
   db.prepare('DELETE FROM income_records WHERE id = ?').run(id);
 }
 
-// 聚合某月某团队的总收入（分）
 function sumIncomeByTeamMonth(teamId, month) {
   const row = db.prepare(
     "SELECT SUM(amount) AS total FROM income_records WHERE team_id = ? AND month = ? AND item_type = 'income'"
@@ -51,7 +62,6 @@ function sumIncomeByTeamMonth(teamId, month) {
   return row?.total || 0;
 }
 
-// 仪表盘统计：按年聚合
 function getYearStats() {
   return db.prepare(`
     SELECT substr(month,1,4) AS year, team_id,
@@ -64,7 +74,6 @@ function getYearStats() {
   `).all();
 }
 
-// 仪表盘统计：按月聚合
 function getMonthStats() {
   return db.prepare(`
     SELECT month, team_id,
@@ -77,14 +86,12 @@ function getMonthStats() {
   `).all();
 }
 
-// 获取某月某团队所有成员姓名（distinct）
 function getPersonNames(teamId, month) {
   return db.prepare(
     'SELECT DISTINCT person_name FROM income_records WHERE team_id = ? AND month = ? ORDER BY person_name ASC'
   ).all(teamId, month).map(r => r.person_name);
 }
 
-// 按成员汇总某月 income 类型收入（返回 Map: name -> cents）
 function sumIncomeByPersonMonth(teamId, month) {
   const rows = db.prepare(
     "SELECT person_name, SUM(amount) AS total FROM income_records WHERE team_id = ? AND month = ? AND item_type = 'income' GROUP BY person_name"
@@ -95,8 +102,15 @@ function sumIncomeByPersonMonth(teamId, month) {
 }
 
 module.exports = {
-  getRecordById, listRecords, getRecordsByTeamAndMonth,
-  createRecord, updateRecord, deleteRecord,
-  sumIncomeByTeamMonth, sumIncomeByPersonMonth,
-  getYearStats, getMonthStats, getPersonNames
+  getRecordById,
+  listRecords,
+  getRecordsByTeamAndMonth,
+  createRecord,
+  updateRecord,
+  deleteRecord,
+  sumIncomeByTeamMonth,
+  sumIncomeByPersonMonth,
+  getYearStats,
+  getMonthStats,
+  getPersonNames
 };

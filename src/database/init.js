@@ -165,6 +165,8 @@ function runMigrations() {
     addColumnIfMissing('teams', 'wecom_webhook_url TEXT');
     addColumnIfMissing('teams', 'auto_settle_enabled INTEGER NOT NULL DEFAULT 0');
     addColumnIfMissing('teams', 'auto_push_enabled INTEGER NOT NULL DEFAULT 0');
+    addColumnIfMissing('teams', 'report_member_names TEXT');
+    addColumnIfMissing('teams', 'leader_user_id INTEGER REFERENCES users(id)');
   }
 
   // wecom_push_logs 表

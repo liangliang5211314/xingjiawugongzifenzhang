@@ -74,7 +74,7 @@ const body = `
 </div>
 `;
 const pageScript = `<script>
-let users = [], teamsMap = {}, allTeams = [];
+let users = [], teamsMap = {}, allTeams = [], currentMe = null;
 
 function escapeHtml(value) {
   return String(value == null ? '' : value)
@@ -99,7 +99,8 @@ async function loadAll() {
   const body = document.getElementById('userListBody');
   body.innerHTML = '<tr><td colspan="8">加载中...</td></tr>';
 
-  const [ur, tr] = await Promise.all([api('/api/users'), api('/api/teams')]);
+  const [meRes, ur, tr] = await Promise.all([api('/api/me'), api('/api/users'), api('/api/teams')]);
+  currentMe = meRes && meRes.ok ? meRes.data : null;
   if (!ur || !tr || !ur.ok || !tr.ok) {
     body.innerHTML = '<tr><td colspan="8">加载失败，请刷新后重试</td></tr>';
     return;
@@ -109,9 +110,14 @@ async function loadAll() {
   allTeams = tr.data || [];
   teamsMap = Object.fromEntries(allTeams.map(function(t) { return [t.id, t.name]; }));
 
+  if (currentMe && currentMe.user && currentMe.user.role !== 'admin') {
+    var adminOpt = document.querySelector('#uRole option[value="admin"]');
+    if (adminOpt) adminOpt.remove();
+  }
+
   body.innerHTML = users.map(function(u) {
     var teamNames = (u.team_ids && u.team_ids.length)
-      ? u.team_ids.map(function(id){ return teamsMap[id] || id; }).join(', ')
+      ? u.team_ids.map(function(id) { return teamsMap[id] || id; }).join(', ')
       : '-';
 
     return '<tr>' +
@@ -224,7 +230,6 @@ async function deleteUser(id) {
 
 async function copyText(text, btn) {
   var copied = false;
-
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);

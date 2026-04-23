@@ -19,17 +19,26 @@ function getMyReports(userId, teamId, month) {
   ).all(userId, teamId, month);
 }
 
-function listReports({ teamId, month } = {}) {
+function listReports({ teamId, teamIds, month } = {}) {
   let sql = `
-    SELECT r.*, u.name as user_name, u.jingfen_realname, t.name as team_name
+    SELECT r.*, u.name AS user_name, u.jingfen_realname, t.name AS team_name
     FROM member_income_reports r
     JOIN users u ON r.user_id = u.id
     JOIN teams t ON r.team_id = t.id
     WHERE 1=1
   `;
   const params = [];
-  if (teamId) { sql += ' AND r.team_id = ?'; params.push(teamId); }
-  if (month)  { sql += ' AND r.month = ?';   params.push(month); }
+  if (Array.isArray(teamIds) && teamIds.length > 0) {
+    sql += ` AND r.team_id IN (${teamIds.map(() => '?').join(', ')})`;
+    params.push(...teamIds);
+  } else if (teamId) {
+    sql += ' AND r.team_id = ?';
+    params.push(teamId);
+  }
+  if (month) {
+    sql += ' AND r.month = ?';
+    params.push(month);
+  }
   sql += ' ORDER BY r.month DESC, u.name ASC, r.item_name ASC';
   return db.prepare(sql).all(...params);
 }

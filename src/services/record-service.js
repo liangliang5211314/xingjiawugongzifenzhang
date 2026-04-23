@@ -30,8 +30,8 @@ function removeRecord(id) {
   deleteRecord(id);
 }
 
-function getRecords({ teamId, month } = {}) {
-  const rows = listRecords({ teamId, month });
+function getRecords({ teamId, teamIds, month } = {}) {
+  const rows = listRecords({ teamId, teamIds, month });
   return rows.map(r => ({ ...r, amount: fromCents(r.amount) }));
 }
 

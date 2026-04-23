@@ -1,6 +1,6 @@
 const { login, loginWithWechat, buildWechatAuthorizeUrl, safeUser } = require('../services/auth-service');
 const { findById } = require('../models/user-model');
-const { getTeamById } = require('../models/team-model');
+const { getTeamById, getTeamsByLeaderUserId } = require('../models/team-model');
 
 function loginController(req, res, next) {
   try {
@@ -13,14 +13,22 @@ function meController(req, res, next) {
   try {
     const user = findById(req.user.id);
     const team = user.team_id ? getTeamById(user.team_id) : null;
-    res.json({ ok: true, data: { user: safeUser(user), team } });
+    const leaderTeams = getTeamsByLeaderUserId(user.id);
+    res.json({
+      ok: true,
+      data: {
+        user: safeUser(user),
+        team,
+        leader_teams: leaderTeams,
+        can_manage_admin: user.role === 'admin' || leaderTeams.length > 0,
+      }
+    });
   } catch (e) { next(e); }
 }
 
 function wechatStartController(req, res) {
   const url = buildWechatAuthorizeUrl();
-  if (!url) return res.status(500).json({ ok: false, message: '微信OAuth未配置' });
-  // 渲染一个带标题的过渡页，让微信浏览器能显示正确的页面名称
+  if (!url) return res.status(500).json({ ok: false, message: '微信 OAuth 未配置' });
   res.send(`<!DOCTYPE html>
 <html lang="zh-CN">
 <head>

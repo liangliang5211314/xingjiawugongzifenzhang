@@ -9,7 +9,7 @@
 <body class="login-page">
   <div class="login-card">
     <h1>团队收益结算系统</h1>
-    <p class="login-sub">管理员登录</p>
+    <p class="login-sub">管理员 / 队长登录</p>
     <form id="loginForm">
       <div class="form-group">
         <label>用户名</label>
@@ -29,27 +29,33 @@
       e.preventDefault();
       const btn = document.getElementById('loginBtn');
       const errEl = document.getElementById('loginError');
-      btn.disabled = true; btn.textContent = '登录中...';
+      btn.disabled = true;
+      btn.textContent = '登录中...';
       errEl.style.display = 'none';
       try {
         const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: document.getElementById('username').value, password: document.getElementById('password').value })
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value
+          })
         });
         const data = await res.json();
         if (data.ok) {
           localStorage.setItem('admin_token', data.data.token);
-          location.href = '/admin/dashboard';
+          const user = data.data.user || {};
+          location.href = user.role === 'admin' ? '/admin/dashboard' : '/admin/teams';
         } else {
           errEl.textContent = data.message || '登录失败';
           errEl.style.display = 'block';
         }
-      } catch(err) {
+      } catch (err) {
         errEl.textContent = '网络错误，请稍后重试';
         errEl.style.display = 'block';
       }
-      btn.disabled = false; btn.textContent = '登录';
+      btn.disabled = false;
+      btn.textContent = '登录';
     });
   </script>
 </body>

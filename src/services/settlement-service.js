@@ -75,8 +75,8 @@ function fetchSettlementById(id) {
   return s;
 }
 
-function getSettlements({ teamId, month } = {}) {
-  return listSettlements({ teamId, month });
+function getSettlements({ teamId, teamIds, month } = {}) {
+  return listSettlements({ teamId, teamIds, month });
 }
 
 function markSettlementPushed(id) {

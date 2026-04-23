@@ -26,19 +26,29 @@ function setUserTeams(userId, teamIds) {
   })();
 }
 
-function listUsers({ teamId, role } = {}) {
+function listUsers({ teamId, teamIds, role } = {}) {
   let sql = `
     SELECT u.id, u.name, u.mobile, u.username, u.role, u.openid, u.team_id, u.status,
            u.jingfen_mobile, u.jingfen_password, u.jingfen_realname, u.jd_account, u.created_at, u.updated_at,
-           (SELECT GROUP_CONCAT(ut.team_id) FROM user_teams ut WHERE ut.user_id = u.id) as team_ids_str
+           (SELECT GROUP_CONCAT(ut.team_id) FROM user_teams ut WHERE ut.user_id = u.id) AS team_ids_str
     FROM users u WHERE 1=1
   `;
   const params = [];
-  if (teamId) {
+
+  if (Array.isArray(teamIds) && teamIds.length > 0) {
+    const placeholders = teamIds.map(() => '?').join(', ');
+    sql += ` AND EXISTS (SELECT 1 FROM user_teams ut WHERE ut.user_id = u.id AND ut.team_id IN (${placeholders}))`;
+    params.push(...teamIds);
+  } else if (teamId) {
     sql += ' AND EXISTS (SELECT 1 FROM user_teams ut WHERE ut.user_id = u.id AND ut.team_id = ?)';
     params.push(teamId);
   }
-  if (role) { sql += ' AND u.role = ?'; params.push(role); }
+
+  if (role) {
+    sql += ' AND u.role = ?';
+    params.push(role);
+  }
+
   sql += ' ORDER BY u.id ASC';
   return db.prepare(sql).all(...params).map(u => {
     u.team_ids = u.team_ids_str ? u.team_ids_str.split(',').map(Number) : (u.team_id ? [u.team_id] : []);
@@ -63,7 +73,10 @@ function updateUser(id, fields) {
   const sets = [];
   const vals = [];
   for (const [k, v] of Object.entries(fields)) {
-    if (allowed.includes(k)) { sets.push(`${k} = ?`); vals.push(v); }
+    if (allowed.includes(k)) {
+      sets.push(`${k} = ?`);
+      vals.push(v);
+    }
   }
   if (!sets.length) return findById(id);
   sets.push('updated_at = CURRENT_TIMESTAMP');
@@ -86,7 +99,19 @@ function upsertWechatUser({ openid, unionid, name }) {
 
 function deleteUserById(id) {
   db.prepare('DELETE FROM user_teams WHERE user_id = ?').run(id);
+  db.prepare('UPDATE teams SET leader_user_id = NULL WHERE leader_user_id = ?').run(id);
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
 }
 
-module.exports = { findByUsername, findById, findByOpenid, getUserTeamIds, setUserTeams, listUsers, createUser, updateUser, upsertWechatUser, deleteUserById };
+module.exports = {
+  findByUsername,
+  findById,
+  findByOpenid,
+  getUserTeamIds,
+  setUserTeams,
+  listUsers,
+  createUser,
+  updateUser,
+  upsertWechatUser,
+  deleteUserById,
+};

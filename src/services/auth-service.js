@@ -1,15 +1,40 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { env } = require('../config/env');
-const { findByUsername, findById, upsertWechatUser } = require('../models/user-model');
+const { findByUsername, upsertWechatUser } = require('../models/user-model');
+const { getTeamsByLeaderUserId } = require('../models/team-model');
 const { HttpError } = require('../utils/http-error');
 
+function getLeaderTeamIds(userId) {
+  return getTeamsByLeaderUserId(userId).map(t => t.id);
+}
+
 function buildToken(user) {
+  const leaderTeamIds = getLeaderTeamIds(user.id);
   return jwt.sign(
-    { sub: user.id, id: user.id, username: user.username, role: user.role, team_id: user.team_id || null },
+    {
+      sub: user.id,
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      team_id: user.team_id || null,
+      managed_team_ids: leaderTeamIds,
+      is_team_leader: leaderTeamIds.length > 0,
+    },
     env.jwtSecret,
     { expiresIn: '12h' }
   );
+}
+
+function safeUser(user) {
+  const { password_hash, ...rest } = user;
+  const leaderTeamIds = getLeaderTeamIds(user.id);
+  return {
+    ...rest,
+    managed_team_ids: leaderTeamIds,
+    is_team_leader: leaderTeamIds.length > 0,
+    can_manage_admin: user.role === 'admin' || leaderTeamIds.length > 0,
+  };
 }
 
 function login(username, password) {
@@ -18,11 +43,6 @@ function login(username, password) {
     throw new HttpError(401, '用户名或密码错误');
   }
   return { token: buildToken(user), user: safeUser(user) };
-}
-
-function safeUser(user) {
-  const { password_hash, ...rest } = user;
-  return rest;
 }
 
 function buildWechatAuthorizeUrl() {
@@ -35,7 +55,7 @@ async function fetchWechatAccessToken(code) {
   const url = `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${env.wxAppId}&secret=${env.wxSecret}&code=${code}&grant_type=authorization_code`;
   const res = await fetch(url);
   const data = await res.json();
-  if (data.errcode) throw new HttpError(401, data.errmsg || '微信code换取token失败');
+  if (data.errcode) throw new HttpError(401, data.errmsg || '微信 code 换取 token 失败');
   return data;
 }
 
@@ -48,8 +68,8 @@ async function fetchWechatUserInfo(accessToken, openid) {
 }
 
 async function loginWithWechat(code) {
-  if (!env.wxAppId || !env.wxSecret) throw new HttpError(500, '微信OAuth未配置');
-  if (!code) throw new HttpError(400, '缺少code参数');
+  if (!env.wxAppId || !env.wxSecret) throw new HttpError(500, '微信 OAuth 未配置');
+  if (!code) throw new HttpError(400, '缺少 code 参数');
 
   const tokenData = await fetchWechatAccessToken(code);
   const profile = await fetchWechatUserInfo(tokenData.access_token, tokenData.openid);

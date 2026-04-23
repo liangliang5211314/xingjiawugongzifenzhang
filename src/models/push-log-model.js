@@ -5,7 +5,9 @@ function createPushLog({ settlement_id, user_id, openid, push_type, request_json
     INSERT INTO push_logs (settlement_id, user_id, openid, push_type, request_json, response_json, status)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
-    settlement_id || null, user_id || null, openid || null,
+    settlement_id || null,
+    user_id || null,
+    openid || null,
     push_type || 'wechat_template',
     request_json ? JSON.stringify(request_json) : null,
     response_json ? JSON.stringify(response_json) : null,
@@ -14,15 +16,23 @@ function createPushLog({ settlement_id, user_id, openid, push_type, request_json
   return db.prepare('SELECT * FROM push_logs WHERE id = ?').get(info.lastInsertRowid);
 }
 
-function listPushLogs({ settlementId, limit = 100 } = {}) {
+function listPushLogs({ settlementId, teamIds, limit = 100 } = {}) {
   let sql = `
-    SELECT pl.*, u.name AS user_name
+    SELECT pl.*, u.name AS user_name, s.team_id
     FROM push_logs pl
     LEFT JOIN users u ON u.id = pl.user_id
+    LEFT JOIN settlements s ON s.id = pl.settlement_id
     WHERE 1=1
   `;
   const params = [];
-  if (settlementId) { sql += ' AND pl.settlement_id = ?'; params.push(settlementId); }
+  if (settlementId) {
+    sql += ' AND pl.settlement_id = ?';
+    params.push(settlementId);
+  }
+  if (Array.isArray(teamIds) && teamIds.length > 0) {
+    sql += ` AND s.team_id IN (${teamIds.map(() => '?').join(', ')})`;
+    params.push(...teamIds);
+  }
   sql += ' ORDER BY pl.created_at DESC LIMIT ?';
   params.push(limit);
   return db.prepare(sql).all(...params);
