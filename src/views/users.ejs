@@ -85,6 +85,16 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function buildOpenIdCell(openid) {
+  if (!openid) return '<span style="color:#bbb">未绑定</span>';
+  return '<div style="display:flex;align-items:flex-start;gap:8px;justify-content:flex-end">' +
+    '<span title="' + escapeHtml(openid) + '" style="display:inline-block;max-width:220px;color:#6c63ff;white-space:normal;word-break:break-all;line-height:1.5;text-align:left">' +
+      escapeHtml(openid) +
+    '</span>' +
+    '<button type="button" class="btn btn-sm" style="padding:2px 8px;font-size:12px;white-space:nowrap" onclick="copyText(' + JSON.stringify(openid) + ', this)">复制</button>' +
+  '</div>';
+}
+
 async function loadAll() {
   const body = document.getElementById('userListBody');
   body.innerHTML = '<tr><td colspan="8">加载中...</td></tr>';
@@ -103,10 +113,6 @@ async function loadAll() {
     var teamNames = (u.team_ids && u.team_ids.length)
       ? u.team_ids.map(function(id){ return teamsMap[id] || id; }).join(', ')
       : '-';
-    var openidHtml = u.openid
-      ? '<span title="' + escapeHtml(u.openid) + '" style="cursor:pointer;color:#6c63ff" onclick="copyText(' + JSON.stringify(u.openid) + ')">'
-          + escapeHtml(u.openid.slice(0, 8) + '...' + u.openid.slice(-4)) + ' 复制</span>'
-      : '<span style="color:#bbb">未绑定</span>';
 
     return '<tr>' +
       '<td>' + u.id + '</td>' +
@@ -114,7 +120,7 @@ async function loadAll() {
       '<td>' + escapeHtml(u.mobile || '-') + '</td>' +
       '<td><span class="badge">' + escapeHtml(u.role) + '</span></td>' +
       '<td>' + escapeHtml(teamNames) + '</td>' +
-      '<td style="font-size:12px;font-family:monospace">' + openidHtml + '</td>' +
+      '<td style="font-size:12px;font-family:monospace">' + buildOpenIdCell(u.openid) + '</td>' +
       '<td>' + (u.status ? '正常' : '停用') + '</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="editUser(' + u.id + ')">编辑</button> ' +
@@ -216,10 +222,37 @@ async function deleteUser(id) {
   if (res && res.ok) loadAll();
 }
 
-function copyText(text) {
-  navigator.clipboard.writeText(text).then(function() {
-    alert('已复制：' + text);
-  });
+async function copyText(text, btn) {
+  var copied = false;
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    }
+  } catch (e) {}
+
+  if (!copied) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', 'readonly');
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    try { copied = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  if (btn) {
+    var oldText = btn.textContent;
+    btn.textContent = copied ? '已复制' : '复制失败';
+    setTimeout(function() { btn.textContent = oldText; }, 1600);
+  } else if (!copied) {
+    alert('复制失败，请手动复制');
+  }
 }
 
 loadAll();
