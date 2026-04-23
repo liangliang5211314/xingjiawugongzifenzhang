@@ -12,7 +12,7 @@ const body = `
   <form id="userForm">
     <input type="hidden" id="userId">
     <div class="form-row">
-      <label>姓名 * <small>（需与录入数据中的姓名完全一致）</small></label>
+      <label>姓名 * <small>需与录入数据中的姓名完全一致</small></label>
       <input type="text" id="uName" required placeholder="如：张三">
     </div>
     <div class="form-row">
@@ -20,7 +20,7 @@ const body = `
       <input type="text" id="uMobile" placeholder="13800000000">
     </div>
     <div class="form-row">
-      <label>所属团队 <small>（可多选）</small></label>
+      <label>所属团队 <small>可多选</small></label>
       <div id="uTeamsBox" style="display:flex;flex-wrap:wrap;gap:12px;padding:6px 0;min-height:32px"></div>
     </div>
     <div class="form-row">
@@ -31,15 +31,15 @@ const body = `
       </select>
     </div>
     <div class="form-row">
-      <label>微信 OpenID <small>（留空=未绑定；填入可与微信授权用户合并）</small></label>
-      <input type="text" id="uOpenid" placeholder="粘贴微信用户的 OpenID" style="font-family:monospace;font-size:13px">
+      <label>微信 OpenID <small>留空表示未绑定；填写后可与微信授权用户合并</small></label>
+      <input type="text" id="uOpenid" placeholder="粘贴微信用户 OpenID" style="font-family:monospace;font-size:13px">
     </div>
     <div class="form-row" id="usernameRow">
-      <label>登录用户名 <small>（管理员必填）</small></label>
+      <label>登录用户名 <small>管理员建议填写</small></label>
       <input type="text" id="uUsername" placeholder="admin2">
     </div>
     <div class="form-row" id="passwordRow">
-      <label>登录密码 <small>（留空则不改密码）</small></label>
+      <label>登录密码 <small>留空则不修改密码</small></label>
       <input type="password" id="uPassword" placeholder="新密码">
     </div>
     <div class="form-row">
@@ -48,7 +48,7 @@ const body = `
     </div>
     <div class="form-row">
       <label>京粉实名人</label>
-      <input type="text" id="uJfRealname" placeholder="京粉账号实名人姓名">
+      <input type="text" id="uJfRealname" placeholder="京粉账号实名姓名">
     </div>
     <div class="form-row">
       <label>京粉手机号</label>
@@ -68,7 +68,7 @@ const body = `
 
 <div class="table-wrap">
   <table class="data-table">
-    <thead><tr><th>ID</th><th>姓名</th><th>手机</th><th>角色</th><th>所属团队</th><th>微信 OpenID</th><th>状态</th><th>操作</th></tr></thead>
+    <thead><tr><th>ID</th><th>姓名</th><th>手机号</th><th>角色</th><th>所属团队</th><th>微信 OpenID</th><th>状态</th><th>操作</th></tr></thead>
     <tbody id="userListBody"><tr><td colspan="8">加载中...</td></tr></tbody>
   </table>
 </div>
@@ -76,26 +76,45 @@ const body = `
 const pageScript = `<script>
 let users = [], teamsMap = {}, allTeams = [];
 
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function loadAll() {
+  const body = document.getElementById('userListBody');
+  body.innerHTML = '<tr><td colspan="8">加载中...</td></tr>';
+
   const [ur, tr] = await Promise.all([api('/api/users'), api('/api/teams')]);
-  if (!ur || !tr) return;
+  if (!ur || !tr || !ur.ok || !tr.ok) {
+    body.innerHTML = '<tr><td colspan="8">加载失败，请刷新后重试</td></tr>';
+    return;
+  }
+
   users = ur.data || [];
   allTeams = tr.data || [];
-  teamsMap = Object.fromEntries(allTeams.map(t => [t.id, t.name]));
-  document.getElementById('userListBody').innerHTML = users.map(function(u) {
+  teamsMap = Object.fromEntries(allTeams.map(function(t) { return [t.id, t.name]; }));
+
+  body.innerHTML = users.map(function(u) {
     var teamNames = (u.team_ids && u.team_ids.length)
-      ? u.team_ids.map(function(id){ return teamsMap[id]||id; }).join(', ')
+      ? u.team_ids.map(function(id){ return teamsMap[id] || id; }).join(', ')
       : '-';
+    var openidHtml = u.openid
+      ? '<span title="' + escapeHtml(u.openid) + '" style="cursor:pointer;color:#6c63ff" onclick="copyText(' + JSON.stringify(u.openid) + ')">'
+          + escapeHtml(u.openid.slice(0, 8) + '...' + u.openid.slice(-4)) + ' 复制</span>'
+      : '<span style="color:#bbb">未绑定</span>';
+
     return '<tr>' +
       '<td>' + u.id + '</td>' +
-      '<td><strong>' + (u.name||'-') + '</strong></td>' +
-      '<td>' + (u.mobile||'-') + '</td>' +
-      '<td><span class="badge">' + u.role + '</span></td>' +
-      '<td>' + teamNames + '</td>' +
-      '<td style="font-size:12px;font-family:monospace">' + (u.openid
-        ? '<span title="' + u.openid + '" style="cursor:pointer;color:#6c63ff" onclick="copyText(\'' + u.openid + '\')">'
-          + u.openid.slice(0, 8) + '…' + u.openid.slice(-4) + ' 📋</span>'
-        : '<span style="color:#bbb">未绑定</span>') + '</td>' +
+      '<td><strong>' + escapeHtml(u.name || '-') + '</strong></td>' +
+      '<td>' + escapeHtml(u.mobile || '-') + '</td>' +
+      '<td><span class="badge">' + escapeHtml(u.role) + '</span></td>' +
+      '<td>' + escapeHtml(teamNames) + '</td>' +
+      '<td style="font-size:12px;font-family:monospace">' + openidHtml + '</td>' +
       '<td>' + (u.status ? '正常' : '停用') + '</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="editUser(' + u.id + ')">编辑</button> ' +
@@ -110,72 +129,97 @@ function renderTeamCheckboxes(selectedIds) {
     var checked = selectedIds && selectedIds.indexOf(t.id) !== -1 ? ' checked' : '';
     return '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:4px 10px;border:1px solid #ddd;border-radius:6px;' +
            (checked ? 'background:#f0f4ff;border-color:#6c63ff;' : '') + '">' +
-           '<input type="checkbox" value="' + t.id + '"' + checked + ' onchange="onTeamCheck(this)"> ' + t.name + '</label>';
+           '<input type="checkbox" value="' + t.id + '"' + checked + ' onchange="onTeamCheck(this)"> ' + escapeHtml(t.name) + '</label>';
   }).join('');
 }
 
 function onTeamCheck(cb) {
   var label = cb.parentNode;
-  if (cb.checked) { label.style.background='#f0f4ff'; label.style.borderColor='#6c63ff'; }
-  else { label.style.background=''; label.style.borderColor='#ddd'; }
+  if (cb.checked) {
+    label.style.background = '#f0f4ff';
+    label.style.borderColor = '#6c63ff';
+  } else {
+    label.style.background = '';
+    label.style.borderColor = '#ddd';
+  }
 }
 
 function showUserForm(user) {
   document.getElementById('userFormWrap').style.display = 'block';
   document.getElementById('userFormTitle').textContent = user ? '编辑成员' : '新建成员';
   document.getElementById('userId').value = user ? user.id : '';
-  document.getElementById('uName').value = user ? user.name||'' : '';
-  document.getElementById('uMobile').value = user ? user.mobile||'' : '';
+  document.getElementById('uName').value = user ? user.name || '' : '';
+  document.getElementById('uMobile').value = user ? user.mobile || '' : '';
   document.getElementById('uRole').value = user ? user.role : 'member';
-  document.getElementById('uUsername').value = user ? user.username||'' : '';
+  document.getElementById('uUsername').value = user ? user.username || '' : '';
   document.getElementById('uPassword').value = '';
-  document.getElementById('uOpenid').value = user ? user.openid||'' : '';
-  document.getElementById('uJdAccount').value = user ? user.jd_account||'' : '';
-  document.getElementById('uJfRealname').value = user ? user.jingfen_realname||'' : '';
-  document.getElementById('uJfMobile').value = user ? user.jingfen_mobile||'' : '';
+  document.getElementById('uOpenid').value = user ? user.openid || '' : '';
+  document.getElementById('uJdAccount').value = user ? user.jd_account || '' : '';
+  document.getElementById('uJfRealname').value = user ? user.jingfen_realname || '' : '';
+  document.getElementById('uJfMobile').value = user ? user.jingfen_mobile || '' : '';
   document.getElementById('uJfPwd').value = '';
   document.getElementById('userFormErr').style.display = 'none';
   renderTeamCheckboxes(user ? user.team_ids || [] : []);
 }
-function hideUserForm() { document.getElementById('userFormWrap').style.display = 'none'; }
-function editUser(id) { showUserForm(users.find(function(u){ return u.id === id; })); }
+
+function hideUserForm() {
+  document.getElementById('userFormWrap').style.display = 'none';
+}
+
+function editUser(id) {
+  showUserForm(users.find(function(u) { return u.id === id; }));
+}
 
 document.getElementById('userForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   const id = document.getElementById('userId').value;
   var checked = document.querySelectorAll('#uTeamsBox input:checked');
   const body = {
-    name:             document.getElementById('uName').value,
-    mobile:           document.getElementById('uMobile').value,
-    role:             document.getElementById('uRole').value,
-    username:         document.getElementById('uUsername').value || null,
-    team_ids:         Array.from(checked).map(function(cb){ return Number(cb.value); }),
-    openid:           document.getElementById('uOpenid').value || null,
-    jd_account:       document.getElementById('uJdAccount').value || null,
+    name: document.getElementById('uName').value,
+    mobile: document.getElementById('uMobile').value,
+    role: document.getElementById('uRole').value,
+    username: document.getElementById('uUsername').value || null,
+    team_ids: Array.from(checked).map(function(cb) { return Number(cb.value); }),
+    openid: document.getElementById('uOpenid').value || null,
+    jd_account: document.getElementById('uJdAccount').value || null,
     jingfen_realname: document.getElementById('uJfRealname').value || null,
-    jingfen_mobile:   document.getElementById('uJfMobile').value || null,
+    jingfen_mobile: document.getElementById('uJfMobile').value || null
   };
+
   const pwd = document.getElementById('uPassword').value;
   if (pwd) body.password = pwd;
+
   const jfPwd = document.getElementById('uJfPwd').value;
   if (jfPwd) body.jingfen_password = jfPwd;
-  const res = await api(id ? '/api/users/'+id : '/api/users', {
-    method: id ? 'PUT' : 'POST', body: JSON.stringify(body)
+
+  const res = await api(id ? '/api/users/' + id : '/api/users', {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(body)
   });
-  if (res && res.ok) { hideUserForm(); loadAll(); }
-  else { var err = document.getElementById('userFormErr'); err.textContent = (res&&res.message)||'保存失败'; err.style.display='block'; }
+
+  if (res && res.ok) {
+    hideUserForm();
+    loadAll();
+  } else {
+    var err = document.getElementById('userFormErr');
+    err.textContent = (res && res.message) || '保存失败';
+    err.style.display = 'block';
+  }
 });
 
 async function deleteUser(id) {
-  var user = users.find(function(u){ return u.id === id; });
+  var user = users.find(function(u) { return u.id === id; });
   var name = user ? (user.name || '该成员') : '该成员';
   if (!confirm('确认删除成员「' + name + '」？此操作不可恢复。')) return;
+
   var res = await api('/api/users/' + id, { method: 'DELETE' });
   if (res && res.ok) loadAll();
 }
 
 function copyText(text) {
-  navigator.clipboard.writeText(text).then(function() { alert('已复制：' + text); });
+  navigator.clipboard.writeText(text).then(function() {
+    alert('已复制：' + text);
+  });
 }
 
 loadAll();
