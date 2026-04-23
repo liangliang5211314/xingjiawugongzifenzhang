@@ -50,6 +50,16 @@
       </div>
     </div>
 
+    <div id="leaderEntryCard" class="m-card" style="display:none">
+      <div class="m-header-row">
+        <div>
+          <div class="m-card-title" style="margin:0">团队管理</div>
+          <div style="font-size:12px;color:#888;margin-top:4px">队长可直接进入团队管理、成员管理、数据录入和结算</div>
+        </div>
+        <button class="m-edit-btn" onclick="enterLeaderAdmin()">进入管理</button>
+      </div>
+    </div>
+
     <div id="teamTabsWrap" style="display:none;gap:8px;overflow-x:auto;padding:0 16px 8px;margin-bottom:4px"></div>
 
     <div class="m-month-bar">
@@ -345,6 +355,7 @@
       if (!me || !me.ok) return;
       currentUser = me.data.user;
       userTeams = me.data.teams || [];
+      renderLeaderEntry();
       document.getElementById('userName').textContent = currentUser.name || '未设置姓名';
       if (userTeams.length === 0) {
         document.getElementById('teamName').textContent = '未绑定团队';
@@ -367,6 +378,22 @@
       document.getElementById('monthLabel').textContent = currentMonth;
       loadReport();
       loadIncome();
+    }
+
+    function renderLeaderEntry() {
+      var card = document.getElementById('leaderEntryCard');
+      if (!currentUser || (!currentUser.is_team_leader && currentUser.role !== 'admin')) {
+        card.style.display = 'none';
+        return;
+      }
+      card.style.display = 'block';
+    }
+
+    function enterLeaderAdmin() {
+      if (!token) return;
+      localStorage.setItem('admin_token', token);
+      if (currentUser && currentUser.role === 'admin') location.href = '/admin/dashboard';
+      else location.href = '/admin/teams';
     }
 
     async function loadIncome() {
