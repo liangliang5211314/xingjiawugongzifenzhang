@@ -30,6 +30,10 @@ const body = `
         <option value="admin">admin（管理员）</option>
       </select>
     </div>
+    <div class="form-row">
+      <label>微信 OpenID <small>（留空=未绑定；填入可与微信授权用户合并）</small></label>
+      <input type="text" id="uOpenid" placeholder="粘贴微信用户的 OpenID" style="font-family:monospace;font-size:13px">
+    </div>
     <div class="form-row" id="usernameRow">
       <label>登录用户名 <small>（管理员必填）</small></label>
       <input type="text" id="uUsername" placeholder="admin2">
@@ -64,7 +68,7 @@ const body = `
 
 <div class="table-wrap">
   <table class="data-table">
-    <thead><tr><th>ID</th><th>姓名</th><th>手机</th><th>角色</th><th>所属团队</th><th>微信绑定</th><th>状态</th><th>操作</th></tr></thead>
+    <thead><tr><th>ID</th><th>姓名</th><th>手机</th><th>角色</th><th>所属团队</th><th>微信 OpenID</th><th>状态</th><th>操作</th></tr></thead>
     <tbody id="userListBody"><tr><td colspan="8">加载中...</td></tr></tbody>
   </table>
 </div>
@@ -88,7 +92,10 @@ async function loadAll() {
       '<td>' + (u.mobile||'-') + '</td>' +
       '<td><span class="badge">' + u.role + '</span></td>' +
       '<td>' + teamNames + '</td>' +
-      '<td>' + (u.openid ? '✅已绑定' : '⬜未绑定') + '</td>' +
+      '<td style="font-size:12px;font-family:monospace">' + (u.openid
+        ? '<span title="' + u.openid + '" style="cursor:pointer;color:#6c63ff" onclick="copyText(\'' + u.openid + '\')">'
+          + u.openid.slice(0, 8) + '…' + u.openid.slice(-4) + ' 📋</span>'
+        : '<span style="color:#bbb">未绑定</span>') + '</td>' +
       '<td>' + (u.status ? '正常' : '停用') + '</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="editUser(' + u.id + ')">编辑</button> ' +
@@ -122,6 +129,7 @@ function showUserForm(user) {
   document.getElementById('uRole').value = user ? user.role : 'member';
   document.getElementById('uUsername').value = user ? user.username||'' : '';
   document.getElementById('uPassword').value = '';
+  document.getElementById('uOpenid').value = user ? user.openid||'' : '';
   document.getElementById('uJdAccount').value = user ? user.jd_account||'' : '';
   document.getElementById('uJfRealname').value = user ? user.jingfen_realname||'' : '';
   document.getElementById('uJfMobile').value = user ? user.jingfen_mobile||'' : '';
@@ -142,6 +150,7 @@ document.getElementById('userForm').addEventListener('submit', async function(e)
     role:             document.getElementById('uRole').value,
     username:         document.getElementById('uUsername').value || null,
     team_ids:         Array.from(checked).map(function(cb){ return Number(cb.value); }),
+    openid:           document.getElementById('uOpenid').value || null,
     jd_account:       document.getElementById('uJdAccount').value || null,
     jingfen_realname: document.getElementById('uJfRealname').value || null,
     jingfen_mobile:   document.getElementById('uJfMobile').value || null,
@@ -163,6 +172,10 @@ async function deleteUser(id) {
   if (!confirm('确认删除成员「' + name + '」？此操作不可恢复。')) return;
   var res = await api('/api/users/' + id, { method: 'DELETE' });
   if (res && res.ok) loadAll();
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(function() { alert('已复制：' + text); });
 }
 
 loadAll();
