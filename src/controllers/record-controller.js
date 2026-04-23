@@ -1,6 +1,7 @@
 const { addRecord, editRecord, removeRecord, getRecords } = require('../services/record-service');
 const { getAllTeams } = require('../models/team-model');
 const { listUsers } = require('../models/user-model');
+const autoSettleService = require('../services/auto-settle-service');
 
 function listRecordsController(req, res, next) {
   try {
@@ -13,6 +14,10 @@ function createRecordController(req, res, next) {
   try {
     const record = addRecord({ ...req.body, created_by: req.user.id });
     res.status(201).json({ ok: true, data: record });
+    // 异步挂钩：不阻塞响应，异常不影响主流程
+    setImmediate(() => {
+      autoSettleService.checkAndRun(record.team_id, record.month).catch(() => {});
+    });
   } catch (e) { next(e); }
 }
 

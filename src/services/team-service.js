@@ -38,12 +38,12 @@ function createNewTeam({ name, rule_type, rule_config, rule_members }) {
   return { ...team, rule_members: getRuleMembers(team.id) };
 }
 
-function updateExistingTeam(teamId, { name, rule_type, rule_config, status, rule_members }) {
+function updateExistingTeam(teamId, { name, rule_type, rule_config, status, rule_members, wecom_webhook_url, auto_settle_enabled, auto_push_enabled }) {
   const existing = getTeamById(teamId);
   if (!existing) throw new HttpError(404, '团队不存在');
   if (name && name !== existing.name && getTeamByName(name)) throw new HttpError(409, '团队名称已存在');
   const config = rule_type ? normalizeRuleConfig(rule_type, rule_config || {}) : existing.rule_config;
-  const team = updateTeam(teamId, { name, rule_type, rule_config: config, status });
+  const team = updateTeam(teamId, { name, rule_type, rule_config: config, status, wecom_webhook_url, auto_settle_enabled, auto_push_enabled });
   if (Array.isArray(rule_members)) setRuleMembers(teamId, rule_members);
   return { ...team, rule_members: getRuleMembers(teamId) };
 }

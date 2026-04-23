@@ -161,6 +161,30 @@ function runMigrations() {
   if (tableExists('teams')) {
     addColumnIfMissing('teams', 'status INTEGER NOT NULL DEFAULT 1');
     addColumnIfMissing('teams', 'updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
+    addColumnIfMissing('teams', 'wecom_webhook_url TEXT');
+    addColumnIfMissing('teams', 'auto_settle_enabled INTEGER NOT NULL DEFAULT 0');
+    addColumnIfMissing('teams', 'auto_push_enabled INTEGER NOT NULL DEFAULT 0');
+  }
+
+  // wecom_push_logs 表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS wecom_push_logs (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id       INTEGER NOT NULL,
+      month         TEXT    NOT NULL,
+      webhook_url   TEXT,
+      request_json  TEXT,
+      response_text TEXT,
+      status        TEXT    NOT NULL,
+      created_at    TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_wecom_push_logs_team_month
+      ON wecom_push_logs(team_id, month);
+  `);
+
+  // settlements表补充 year_compare_prev3
+  if (tableExists('settlements')) {
+    addColumnIfMissing('settlements', 'year_compare_prev3 INTEGER');
   }
 }
 

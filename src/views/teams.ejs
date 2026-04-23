@@ -37,6 +37,22 @@ const body = `
       <div id="ruleMembersWrap"></div>
     </div>
 
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:14px;margin-top:12px;background:#fafafa">
+      <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:10px">⚙️ 企业微信自动化</div>
+      <div class="form-row">
+        <label>企业微信 Webhook URL</label>
+        <input type="text" id="tWecomWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+      </div>
+      <div style="display:flex;gap:24px;margin-top:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer">
+          <input type="checkbox" id="tAutoSettle"> 全员提交后自动结算
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer">
+          <input type="checkbox" id="tAutoPush"> 结算完自动推送企业微信
+        </label>
+      </div>
+    </div>
+
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">保存</button>
       <button type="button" class="btn" onclick="hideTeamForm()">取消</button>
@@ -160,6 +176,9 @@ async function showTeamForm(team) {
   document.getElementById('formTitle').textContent = team ? '编辑团队' : '新建团队';
   document.getElementById('teamId').value = team ? team.id : '';
   document.getElementById('tName').value = team ? team.name : '';
+  document.getElementById('tWecomWebhook').value = team ? (team.wecom_webhook_url || '') : '';
+  document.getElementById('tAutoSettle').checked = team ? !!team.auto_settle_enabled : false;
+  document.getElementById('tAutoPush').checked = team ? !!team.auto_push_enabled : false;
   document.getElementById('teamFormErr').style.display = 'none';
 
   currentFormMembers = [];
@@ -192,10 +211,13 @@ document.getElementById('teamForm').addEventListener('submit', async function(e)
   var err = document.getElementById('teamFormErr');
   err.style.display = 'none';
   var body = {
-    name:        document.getElementById('tName').value,
-    rule_type:   'custom',
-    rule_config: { allocations: [] },
-    rule_members: collectRuleMembers(),
+    name:               document.getElementById('tName').value,
+    rule_type:          'custom',
+    rule_config:        { allocations: [] },
+    rule_members:       collectRuleMembers(),
+    wecom_webhook_url:  document.getElementById('tWecomWebhook').value.trim() || null,
+    auto_settle_enabled: document.getElementById('tAutoSettle').checked ? 1 : 0,
+    auto_push_enabled:   document.getElementById('tAutoPush').checked   ? 1 : 0,
   };
   var res = await api(id ? '/api/teams/'+id : '/api/teams', {
     method: id ? 'PUT' : 'POST', body: JSON.stringify(body)
