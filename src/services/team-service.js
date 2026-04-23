@@ -1,4 +1,4 @@
-const { createTeam, getAllTeams, getTeamById, getTeamByName, updateTeam } = require('../models/team-model');
+const { createTeam, getAllTeams, getTeamById, getTeamByName, getOtherTeamByLeaderUserId, updateTeam } = require('../models/team-model');
 const { getUserTeamIds, findById } = require('../models/user-model');
 const { HttpError } = require('../utils/http-error');
 const { getRuleMembers, setRuleMembers } = require('../models/team-rule-member-model');
@@ -35,6 +35,10 @@ function validateLeader(leaderUserId, teamMemberNames, teamId) {
   if (!leaderUserId) return null;
   const leader = findById(Number(leaderUserId));
   if (!leader) throw new HttpError(404, '队长用户不存在');
+  const conflictTeam = getOtherTeamByLeaderUserId(leader.id, teamId || 0);
+  if (conflictTeam) {
+    throw new HttpError(409, `该用户已是「${conflictTeam.name}」的队长，一个用户只能担任一个团队队长`);
+  }
   if (teamId) {
     const leaderTeamIds = getUserTeamIds(leader.id);
     if (!leaderTeamIds.includes(teamId)) {

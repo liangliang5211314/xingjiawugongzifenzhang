@@ -13,7 +13,10 @@ function authenticate(req, res, next) {
 
   try {
     req.user = jwt.verify(token, env.jwtSecret);
-    const managedTeamIds = getTeamsByLeaderUserId(req.user.id).map(t => t.id);
+    const leaderTeams = getTeamsByLeaderUserId(req.user.id);
+    const managedTeamIds = leaderTeams.length <= 1
+      ? leaderTeams.map(t => t.id)
+      : [leaderTeams[0].id];
     req.user.managed_team_ids = managedTeamIds;
     req.user.is_team_leader = managedTeamIds.length > 0;
     return next();

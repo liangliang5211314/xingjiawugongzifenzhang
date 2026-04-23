@@ -17,6 +17,12 @@ function getTeamsByLeaderUserId(userId) {
   return db.prepare('SELECT * FROM teams WHERE leader_user_id = ? ORDER BY id ASC').all(userId).map(mapTeam);
 }
 
+function getOtherTeamByLeaderUserId(userId, excludeTeamId) {
+  return mapTeam(db.prepare(
+    'SELECT * FROM teams WHERE leader_user_id = ? AND id != ? ORDER BY id ASC LIMIT 1'
+  ).get(userId, excludeTeamId));
+}
+
 function getTeamById(id) {
   return mapTeam(db.prepare('SELECT * FROM teams WHERE id = ?').get(id));
 }
@@ -81,6 +87,7 @@ function deleteTeamById(id) {
 module.exports = {
   getAllTeams,
   getTeamsByLeaderUserId,
+  getOtherTeamByLeaderUserId,
   getTeamById,
   getTeamByName,
   createTeam,

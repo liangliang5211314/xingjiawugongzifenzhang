@@ -6,7 +6,9 @@ const { getTeamsByLeaderUserId } = require('../models/team-model');
 const { HttpError } = require('../utils/http-error');
 
 function getLeaderTeamIds(userId) {
-  return getTeamsByLeaderUserId(userId).map(t => t.id);
+  const teams = getTeamsByLeaderUserId(userId);
+  if (teams.length <= 1) return teams.map(t => t.id);
+  return [teams[0].id];
 }
 
 function buildToken(user) {

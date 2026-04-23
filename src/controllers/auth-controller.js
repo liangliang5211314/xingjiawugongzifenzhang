@@ -13,7 +13,7 @@ function meController(req, res, next) {
   try {
     const user = findById(req.user.id);
     const team = user.team_id ? getTeamById(user.team_id) : null;
-    const leaderTeams = getTeamsByLeaderUserId(user.id);
+    const leaderTeams = getTeamsByLeaderUserId(user.id).slice(0, 1);
     res.json({
       ok: true,
       data: {
