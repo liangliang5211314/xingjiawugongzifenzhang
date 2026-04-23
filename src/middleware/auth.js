@@ -13,12 +13,21 @@ function authenticate(req, res, next) {
 
   try {
     req.user = jwt.verify(token, env.jwtSecret);
+    req.user.original_role = req.user.role;
     const leaderTeams = getTeamsByLeaderUserId(req.user.id);
     const managedTeamIds = leaderTeams.length <= 1
       ? leaderTeams.map(t => t.id)
       : [leaderTeams[0].id];
+    const scopedLeaderTeamId = Number(req.headers['x-leader-team-id'] || 0);
+    const useScopedLeaderTeam = scopedLeaderTeamId && managedTeamIds.includes(scopedLeaderTeamId);
     req.user.managed_team_ids = managedTeamIds;
     req.user.is_team_leader = managedTeamIds.length > 0;
+    req.user.active_leader_team_id = useScopedLeaderTeam ? scopedLeaderTeamId : null;
+    req.user.is_scoped_leader_session = !!useScopedLeaderTeam;
+    if (useScopedLeaderTeam) {
+      req.user.managed_team_ids = [scopedLeaderTeamId];
+      if (req.user.role === 'admin') req.user.role = 'leader';
+    }
     return next();
   } catch {
     return next(new HttpError(401, 'Token 无效或已过期'));

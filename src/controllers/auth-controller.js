@@ -13,14 +13,23 @@ function meController(req, res, next) {
   try {
     const user = findById(req.user.id);
     const team = user.team_id ? getTeamById(user.team_id) : null;
-    const leaderTeams = getTeamsByLeaderUserId(user.id).slice(0, 1);
+    const leaderTeams = getTeamsByLeaderUserId(user.id)
+      .filter(t => req.user.managed_team_ids.includes(t.id))
+      .slice(0, 1);
+    const sessionUser = {
+      ...safeUser(user),
+      role: req.user.role,
+      managed_team_ids: req.user.managed_team_ids,
+      is_team_leader: req.user.is_team_leader,
+      can_manage_admin: req.user.role === 'admin',
+    };
     res.json({
       ok: true,
       data: {
-        user: safeUser(user),
+        user: sessionUser,
         team,
         leader_teams: leaderTeams,
-        can_manage_admin: user.role === 'admin' || leaderTeams.length > 0,
+        can_manage_admin: req.user.role === 'admin',
       }
     });
   } catch (e) { next(e); }

@@ -391,6 +391,7 @@
       if (!currentTeamId || managed.indexOf(Number(currentTeamId)) === -1) {
         card.style.display = 'none';
         localStorage.removeItem('admin_token');
+        localStorage.removeItem('leader_team_id');
         return;
       }
       card.style.display = 'block';
@@ -402,6 +403,7 @@
         : [];
       if (!token || !currentTeamId || managed.indexOf(Number(currentTeamId)) === -1) return;
       localStorage.setItem('admin_token', token);
+      localStorage.setItem('leader_team_id', String(currentTeamId));
       location.href = '/admin/teams';
     }
 

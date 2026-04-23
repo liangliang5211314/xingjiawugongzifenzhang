@@ -43,6 +43,7 @@
         });
         const data = await res.json();
         if (data.ok) {
+          localStorage.removeItem('leader_team_id');
           localStorage.setItem('admin_token', data.data.token);
           const user = data.data.user || {};
           location.href = user.role === 'admin' ? '/admin/dashboard' : '/admin/teams';

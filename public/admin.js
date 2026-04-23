@@ -4,8 +4,13 @@ function getToken() {
   return localStorage.getItem('admin_token');
 }
 
+function getLeaderTeamId() {
+  return localStorage.getItem('leader_team_id');
+}
+
 function logout() {
   localStorage.removeItem('admin_token');
+  localStorage.removeItem('leader_team_id');
   __sessionPromise = null;
   location.href = '/';
 }
@@ -25,7 +30,8 @@ async function api(url, options = {}) {
   const defaults = {
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: 'Bearer ' + token } : {})
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      ...(getLeaderTeamId() ? { 'X-Leader-Team-Id': getLeaderTeamId() } : {})
     }
   };
 
