@@ -39,7 +39,15 @@ function updateTeam(id, { name, rule_type, rule_config, status, wecom_webhook_ur
 }
 
 function deleteTeamById(id) {
-  db.prepare('DELETE FROM teams WHERE id = ?').run(id);
+  db.transaction(() => {
+    db.prepare('DELETE FROM income_records WHERE team_id = ?').run(id);
+    db.prepare('DELETE FROM settlements WHERE team_id = ?').run(id);
+    db.prepare('DELETE FROM wecom_push_logs WHERE team_id = ?').run(id);
+    try { db.prepare('DELETE FROM team_rule_members WHERE team_id = ?').run(id); } catch (e) {}
+    db.prepare('UPDATE users SET team_id = NULL WHERE team_id = ?').run(id);
+    try { db.prepare('DELETE FROM user_teams WHERE team_id = ?').run(id); } catch (e) {}
+    db.prepare('DELETE FROM teams WHERE id = ?').run(id);
+  })();
 }
 
 module.exports = { getAllTeams, getTeamById, getTeamByName, createTeam, updateTeam, deleteTeamById };

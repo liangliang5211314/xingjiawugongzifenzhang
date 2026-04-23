@@ -240,12 +240,13 @@ function deleteTeam(id) {
   var team = teams.find(function(t){ return t.id === id; });
   var name = team ? team.name : '该团队';
   var mask = document.getElementById('confirmMask');
-  document.getElementById('confirmMsg').textContent = '确认删除团队「' + name + '」？此操作不可恢复。';
+  document.getElementById('confirmMsg').textContent = '确认删除团队「' + name + '」？该团队所有收入记录和结算数据将一并删除，不可恢复。';
   mask.style.display = 'flex';
   document.getElementById('confirmOk').onclick = async function() {
     mask.style.display = 'none';
     var res = await api('/api/teams/' + id, { method: 'DELETE' });
     if (res && res.ok) loadTeams();
+    else alert('删除失败：' + ((res && res.message) || '未知错误'));
   };
   document.getElementById('confirmCancel').onclick = function() { mask.style.display = 'none'; };
 }
