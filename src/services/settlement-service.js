@@ -1,5 +1,5 @@
 const { getTeamById } = require('../models/team-model');
-const { getRecordsByTeamAndMonth, sumIncomeByTeamMonth, getPersonNames } = require('../models/record-model');
+const { getRecordsByTeamAndMonth, sumIncomeByTeamMonth, sumIncomeByPersonMonth, getPersonNames } = require('../models/record-model');
 const { getSettlement, getSettlementById, listSettlements, saveSettlement, markPushed, getMonthTotalIncome } = require('../models/settlement-model');
 const { HttpError } = require('../utils/http-error');
 const { toCents } = require('../utils/money');
@@ -36,6 +36,15 @@ function runSettlement(teamId, month) {
   const totalExpenseCents = records.filter(r => r.item_type === 'expense').reduce((s, r) => s + Math.abs(r.amount), 0);
 
   const { last, prev2, prev3 } = fetchYearCompare(teamId, month);
+
+  // 成员个人同月收入历史对比
+  const [year, mon] = month.split('-');
+  const memberCompare = {
+    last:  sumIncomeByPersonMonth(teamId, `${Number(year) - 1}-${mon}`),
+    prev2: sumIncomeByPersonMonth(teamId, `${Number(year) - 2}-${mon}`),
+    prev3: sumIncomeByPersonMonth(teamId, `${Number(year) - 3}-${mon}`),
+  };
+  result.member_compare = memberCompare;
 
   return saveSettlement(teamId, month, {
     total_income:        totalIncomeCents,

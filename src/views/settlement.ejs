@@ -207,12 +207,32 @@ function showSettleResult(s) {
     {label:'退税',   value:'¥'+(r.total_tax||0)},
     {label:'可分配', value:'¥'+(r.distributable||0)},
   ].map(function(item){return '<div class="stat-card"><div class="stat-label">'+item.label+'</div><div class="stat-value">'+item.value+'</div></div>';}).join('');
+  var mc = r.member_compare || {};
+  var mcParts = s.month.split('-');
+  var mcYr = Number(mcParts[0]), mcMn = mcParts[1];
+  var mcFmt = function(cents) { return cents != null && cents > 0 ? '¥'+(cents/100).toFixed(2) : null; };
+  var mcPct = function(cur, ref) {
+    if (!ref || ref <= 0) return '';
+    var p = ((cur - ref) / ref * 100).toFixed(1);
+    return (p >= 0 ? '+' : '') + p + '%';
+  };
   document.getElementById('settleMemberBody').innerHTML = (r.members||[]).map(function(m) {
     var diff = parseFloat(m.diff);
     var cls = diff > 0 ? 'text-green' : diff < 0 ? 'text-red' : '';
     var arrow = diff > 0 ? '↑待收' : diff < 0 ? '↓待付' : '✅平衡';
+    var curCents = Math.round(parseFloat(m.actual) * 100);
+    var v1 = mc.last  && mc.last[m.name]  != null ? mc.last[m.name]  : null;
+    var v2 = mc.prev2 && mc.prev2[m.name] != null ? mc.prev2[m.name] : null;
+    var v3 = mc.prev3 && mc.prev3[m.name] != null ? mc.prev3[m.name] : null;
+    var cmpParts = [];
+    if (v1 != null) cmpParts.push((mcYr-1)+'-'+mcMn+'：'+mcFmt(v1)+'（'+mcPct(curCents,v1)+'）');
+    if (v2 != null) cmpParts.push((mcYr-2)+'-'+mcMn+'：'+mcFmt(v2)+'（'+mcPct(curCents,v2)+'）');
+    if (v3 != null) cmpParts.push((mcYr-3)+'-'+mcMn+'：'+mcFmt(v3)+'（'+mcPct(curCents,v3)+'）');
+    var cmpRow = cmpParts.length
+      ? '<tr><td colspan="4" style="font-size:12px;color:#888;padding:2px 12px 8px;background:#fafafa">历史同月收入：' + cmpParts.join('　') + '</td></tr>'
+      : '';
     return '<tr><td><strong>'+m.name+'</strong></td><td>¥'+m.should_get+'</td><td>¥'+m.actual+'</td>' +
-      '<td class="'+cls+'">¥'+m.diff+' <small>'+arrow+'</small></td></tr>';
+      '<td class="'+cls+'">¥'+m.diff+' <small>'+arrow+'</small></td></tr>' + cmpRow;
   }).join('') || '<tr><td colspan="4">-</td></tr>';
   document.getElementById('settleTransfers').innerHTML = (r.transfers||[]).length
     ? (r.transfers||[]).map(function(t){
@@ -268,6 +288,8 @@ function generatePushText(s) {
   // 成员明细
   lines.push(sep);
   lines.push('👥 成员分账明细');
+  var mc2 = r.member_compare || {};
+  var ptYr = Number(yr), ptMn = mn;
   (r.members || []).forEach(function(m) {
     var diff = parseFloat(m.diff);
     var diffStr;
@@ -276,6 +298,17 @@ function generatePushText(s) {
     else                         diffStr = '-¥' + fmt(Math.abs(diff)) + '（需支付）';
     lines.push(m.name);
     lines.push('  应收 ¥' + fmt(m.should_get) + '　实收 ¥' + fmt(m.actual) + '　差额 ' + diffStr);
+    var curC = Math.round(parseFloat(m.actual) * 100);
+    var ptPct = function(ref) {
+      if (!ref || ref <= 0) return '';
+      var p = ((curC - ref) / ref * 100).toFixed(1);
+      return (p >= 0 ? '+' : '') + p + '%';
+    };
+    var cmpItems = [];
+    if (mc2.last  && mc2.last[m.name]  > 0) cmpItems.push((ptYr-1)+'-'+ptMn+'：¥'+(mc2.last[m.name]/100).toFixed(2)+'（'+ptPct(mc2.last[m.name])+'）');
+    if (mc2.prev2 && mc2.prev2[m.name] > 0) cmpItems.push((ptYr-2)+'-'+ptMn+'：¥'+(mc2.prev2[m.name]/100).toFixed(2)+'（'+ptPct(mc2.prev2[m.name])+'）');
+    if (mc2.prev3 && mc2.prev3[m.name] > 0) cmpItems.push((ptYr-3)+'-'+ptMn+'：¥'+(mc2.prev3[m.name]/100).toFixed(2)+'（'+ptPct(mc2.prev3[m.name])+'）');
+    if (cmpItems.length) lines.push('  历史：' + cmpItems.join(' / '));
   });
 
   // 转账方案

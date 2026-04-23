@@ -84,8 +84,19 @@ function getPersonNames(teamId, month) {
   ).all(teamId, month).map(r => r.person_name);
 }
 
+// 按成员汇总某月 income 类型收入（返回 Map: name -> cents）
+function sumIncomeByPersonMonth(teamId, month) {
+  const rows = db.prepare(
+    "SELECT person_name, SUM(amount) AS total FROM income_records WHERE team_id = ? AND month = ? AND item_type = 'income' GROUP BY person_name"
+  ).all(teamId, month);
+  const map = {};
+  rows.forEach(r => { map[r.person_name] = r.total || 0; });
+  return map;
+}
+
 module.exports = {
   getRecordById, listRecords, getRecordsByTeamAndMonth,
   createRecord, updateRecord, deleteRecord,
-  sumIncomeByTeamMonth, getYearStats, getMonthStats, getPersonNames
+  sumIncomeByTeamMonth, sumIncomeByPersonMonth,
+  getYearStats, getMonthStats, getPersonNames
 };
