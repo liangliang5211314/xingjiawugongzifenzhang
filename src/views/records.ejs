@@ -31,7 +31,8 @@ const body = `
       </div>
       <div class="form-row">
         <label>成员姓名 *</label>
-        <select id="rName" required><option value="">选择成员</option></select>
+        <input type="text" id="rName" list="rNameList" required placeholder="选择或输入姓名">
+        <datalist id="rNameList"></datalist>
       </div>
       <div class="form-row">
         <label>类型 *</label>
@@ -141,17 +142,30 @@ async function loadRecords() {
 
 async function loadNameSuggestions(selectedName, selectedPayer) {
   const teamId = document.getElementById('rTeam').value;
-  var nameOpts  = '<option value="">选择成员</option>';
-  var payerOpts = '<option value="">选择垫付人</option>';
+  var memberNames = [];
+  var extraNames = [];
   if (teamId) {
-    const res = await api('/api/users?team_id=' + teamId);
-    const names = res ? (res.data||[]).map(function(u){ return u.name; }).filter(Boolean) : [];
-    names.forEach(function(n) {
-      nameOpts  += '<option value="'+n+'"'+(n===selectedName  ?' selected':'')+'>'+n+'</option>';
-      payerOpts += '<option value="'+n+'"'+(n===selectedPayer ?' selected':'')+'>'+n+'</option>';
-    });
+    const [userRes, teamRes] = await Promise.all([
+      api('/api/users?team_id=' + teamId),
+      api('/api/teams'),
+    ]);
+    memberNames = userRes ? (userRes.data||[]).map(function(u){ return u.name; }).filter(Boolean) : [];
+    var team = teamRes ? (teamRes.data||[]).find(function(t){ return t.id === Number(teamId); }) : null;
+    extraNames = (team && Array.isArray(team.extra_accounts)) ? team.extra_accounts : [];
   }
-  document.getElementById('rName').innerHTML  = nameOpts;
+  // datalist for rName: 成员 + 其他账户（用分隔线区分）
+  var allNames = memberNames.concat(extraNames.filter(function(n){ return memberNames.indexOf(n) === -1; }));
+  document.getElementById('rNameList').innerHTML = allNames.map(function(n){
+    return '<option value="' + n + '">';
+  }).join('');
+  if (selectedName) document.getElementById('rName').value = selectedName;
+  else if (!document.getElementById('rName').value) document.getElementById('rName').value = '';
+
+  // payer 仍是 select
+  var payerOpts = '<option value="">选择垫付人</option>';
+  memberNames.forEach(function(n) {
+    payerOpts += '<option value="'+n+'"'+(n===selectedPayer?' selected':'')+'>'+n+'</option>';
+  });
   document.getElementById('rPayer').innerHTML = payerOpts;
 }
 

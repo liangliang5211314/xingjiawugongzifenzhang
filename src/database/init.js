@@ -167,6 +167,7 @@ function runMigrations() {
     addColumnIfMissing('teams', 'auto_push_enabled INTEGER NOT NULL DEFAULT 0');
     addColumnIfMissing('teams', 'report_member_names TEXT');
     addColumnIfMissing('teams', 'leader_user_id INTEGER REFERENCES users(id)');
+    addColumnIfMissing('teams', 'extra_accounts TEXT');
   }
 
   // wecom_push_logs 表

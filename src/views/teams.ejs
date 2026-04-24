@@ -66,6 +66,12 @@ const body = `
       </div>
     </div>
 
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:14px;margin-top:12px;background:#fafafa">
+      <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:6px">其他账户（京粉账户）</div>
+      <div style="font-size:12px;color:#999;margin-bottom:10px">填写非团队成员的收款账户名（如：楼幻彩），每行一个。录入数据时可直接选择，结算转账方案会显示该账户向各成员的转账。</div>
+      <textarea id="tExtraAccounts" rows="3" style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:14px;resize:vertical" placeholder="每行填写一个账户名，如：&#10;楼幻彩&#10;张三他妈"></textarea>
+    </div>
+
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">保存</button>
       <button type="button" class="btn" onclick="hideTeamForm()">取消</button>
@@ -306,6 +312,8 @@ async function showTeamForm(team) {
   renderRuleMembers(currentFormMembers, team ? (team.rule_members || []) : []);
   renderReportMembers(currentFormMembers, team ? (team.report_member_names || []) : []);
   renderLeaderOptions(currentFormMembers, team ? team.leader_user_id : null);
+  document.getElementById('tExtraAccounts').value = team && team.extra_accounts && team.extra_accounts.length
+    ? team.extra_accounts.join('\n') : '';
   document.getElementById('teamFormWrap').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -331,7 +339,8 @@ document.getElementById('teamForm').addEventListener('submit', async function(e)
     report_member_names: collectReportMembers(),
     wecom_webhook_url: document.getElementById('tWecomWebhook').value.trim() || null,
     auto_settle_enabled: document.getElementById('tAutoSettle').checked ? 1 : 0,
-    auto_push_enabled: document.getElementById('tAutoPush').checked ? 1 : 0
+    auto_push_enabled: document.getElementById('tAutoPush').checked ? 1 : 0,
+    extra_accounts: document.getElementById('tExtraAccounts').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
   };
 
   if (currentMe && currentMe.user && currentMe.user.role === 'admin') {

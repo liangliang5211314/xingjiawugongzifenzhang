@@ -6,6 +6,7 @@ function mapTeam(row) {
     ...row,
     rule_config: JSON.parse(row.rule_config || '{}'),
     report_member_names: JSON.parse(row.report_member_names || '[]'),
+    extra_accounts: JSON.parse(row.extra_accounts || '[]'),
   };
 }
 
@@ -31,16 +32,17 @@ function getTeamByName(name) {
   return mapTeam(db.prepare('SELECT * FROM teams WHERE name = ?').get(name));
 }
 
-function createTeam({ name, rule_type, rule_config, report_member_names, leader_user_id }) {
+function createTeam({ name, rule_type, rule_config, report_member_names, leader_user_id, extra_accounts }) {
   const info = db.prepare(`
-    INSERT INTO teams (name, rule_type, rule_config, report_member_names, leader_user_id)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO teams (name, rule_type, rule_config, report_member_names, leader_user_id, extra_accounts)
+    VALUES (?, ?, ?, ?, ?, ?)
   `).run(
     name,
     rule_type,
     JSON.stringify(rule_config || {}),
     JSON.stringify(report_member_names || []),
-    leader_user_id || null
+    leader_user_id || null,
+    JSON.stringify(extra_accounts || [])
   );
   return getTeamById(info.lastInsertRowid);
 }
@@ -55,6 +57,7 @@ function updateTeam(id, {
   auto_push_enabled,
   report_member_names,
   leader_user_id,
+  extra_accounts,
 }) {
   const sets = ['updated_at = CURRENT_TIMESTAMP'];
   const vals = [];
@@ -62,6 +65,7 @@ function updateTeam(id, {
   if (rule_type !== undefined)           { sets.push('rule_type = ?');           vals.push(rule_type); }
   if (rule_config !== undefined)         { sets.push('rule_config = ?');         vals.push(JSON.stringify(rule_config)); }
   if (report_member_names !== undefined) { sets.push('report_member_names = ?'); vals.push(JSON.stringify(report_member_names || [])); }
+  if (extra_accounts !== undefined)      { sets.push('extra_accounts = ?');      vals.push(JSON.stringify(extra_accounts || [])); }
   if (leader_user_id !== undefined)      { sets.push('leader_user_id = ?');      vals.push(leader_user_id || null); }
   if (status !== undefined)              { sets.push('status = ?');              vals.push(status); }
   if (wecom_webhook_url !== undefined)   { sets.push('wecom_webhook_url = ?');   vals.push(wecom_webhook_url || null); }
