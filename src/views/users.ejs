@@ -182,7 +182,7 @@ function editUser(id) {
   showUserForm(users.find(function(u) { return u.id === id; }));
 }
 
-document.getElementById('userForm').addEventListener('submit', async function(e) {
+(document.getElementById('userForm') || { addEventListener: function(){} }).addEventListener('submit', async function(e) {
   e.preventDefault();
   const id = document.getElementById('userId').value;
   var checked = document.querySelectorAll('#uTeamsBox input:checked');
@@ -260,7 +260,10 @@ async function copyText(text, btn) {
   }
 }
 
-loadAll();
+loadAll().catch(function(e) {
+  var tb = document.getElementById('userListBody');
+  if (tb) tb.innerHTML = '<tr><td colspan="8" style="color:red;padding:12px">加载失败：' + e.message + '</td></tr>';
+});
 </script>`;
 %>
 <%- include('layout', { title, page, body, pageScript }) %>

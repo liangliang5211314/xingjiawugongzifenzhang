@@ -325,7 +325,7 @@ function editTeam(id) {
   showTeamForm(teams.find(function(t) { return t.id === id; }));
 }
 
-document.getElementById('teamForm').addEventListener('submit', async function(e) {
+(document.getElementById('teamForm') || { addEventListener: function(){} }).addEventListener('submit', async function(e) {
   e.preventDefault();
   var id = document.getElementById('teamId').value;
   var err = document.getElementById('teamFormErr');
@@ -378,7 +378,10 @@ function deleteTeam(id) {
   };
 }
 
-loadTeams();
+loadTeams().catch(function(e) {
+  var tb = document.getElementById('teamListBody');
+  if (tb) tb.innerHTML = '<tr><td colspan="6" style="color:red;padding:12px">加载失败：' + e.message + '</td></tr>';
+});
 </script>`;
 %>
 <%- include('layout', { title, page, body, pageScript }) %>
