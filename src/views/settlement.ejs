@@ -82,12 +82,21 @@ const body = `
 const pageScript = `<script>
 let teamsMap = {}, allTeams = [], currentSettlement = null;
 
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function initPage() {
   const tr = await api('/api/teams');
   allTeams = tr ? tr.data || [] : [];
   teamsMap = Object.fromEntries(allTeams.map(t => [t.id, t.name]));
   document.getElementById('sTeam').innerHTML = allTeams.map(t =>
-    '<option value="'+t.id+'">'+t.name+'</option>').join('');
+    '<option value="'+t.id+'">'+escapeHtml(t.name)+'</option>').join('');
   document.getElementById('sMonth').value = new Date().toISOString().slice(0,7);
   onTeamMonthChange();
   loadSettlements();
@@ -103,9 +112,9 @@ function showTeamFormula() {
   if (rm.length > 0) {
     html += rm.map(function(m) {
       var rule = m.rule_mode === 'formula'
-        ? '<code style="background:#e8ecff;padding:1px 5px;border-radius:3px">' + m.formula + '</code>'
+        ? '<code style="background:#e8ecff;padding:1px 5px;border-radius:3px">' + escapeHtml(m.formula) + '</code>'
         : '<strong>' + (m.ratio != null ? (m.ratio * 100).toFixed(0) : '?') + '%</strong>';
-      return '<strong>' + m.member_name + '</strong> → ' + rule;
+      return '<strong>' + escapeHtml(m.member_name) + '</strong> → ' + rule;
     }).join('　　');
   } else {
     html += '<span style="color:#f44336">⚠️ 未配置成员分账公式，请先到团队管理页面设置</span>';
@@ -158,7 +167,7 @@ async function loadMemberPreview() {
 
     function fmt(v) { return parseFloat(v).toFixed(2); }
     return '<tr>' +
-      '<td><strong>' + name + '</strong></td>' +
+      '<td><strong>' + escapeHtml(name) + '</strong></td>' +
       '<td>' + (jingfen  ? '<span style="color:#6c63ff">¥' + fmt(jingfen) + '</span>'  : '<span style="color:#bbb">-</span>') + '</td>' +
       '<td>' + (taobao   ? '<span style="color:#6c63ff">¥' + fmt(taobao)  + '</span>'  : '<span style="color:#bbb">-</span>') + '</td>' +
       '<td>' + (expTotal ? '<span style="color:#f44336">-¥' + fmt(expTotal) + '</span>' : '<span style="color:#bbb">-</span>') + '</td>' +
@@ -233,12 +242,12 @@ function showSettleResult(s) {
     var cmpRow = cmpParts.length
       ? '<tr><td colspan="4" style="font-size:12px;color:#888;padding:2px 12px 8px;background:#fafafa">历史同月收入：' + cmpParts.join('　') + '</td></tr>'
       : '';
-    return '<tr><td><strong>'+m.name+'</strong></td><td>¥'+m.should_get+'</td><td>¥'+m.actual+'</td>' +
-      '<td class="'+cls+'">¥'+m.diff+' <small>'+arrow+'</small></td></tr>' + cmpRow;
+    return '<tr><td><strong>'+escapeHtml(m.name)+'</strong></td><td>¥'+escapeHtml(m.should_get)+'</td><td>¥'+escapeHtml(m.actual)+'</td>' +
+      '<td class="'+cls+'">¥'+escapeHtml(m.diff)+' <small>'+arrow+'</small></td></tr>' + cmpRow;
   }).join('') || '<tr><td colspan="4">-</td></tr>';
   document.getElementById('settleTransfers').innerHTML = (r.transfers||[]).length
     ? (r.transfers||[]).map(function(t){
-        return '<div style="padding:8px 12px;background:#fff8e1;border-radius:8px;margin-bottom:6px">💸 <strong>'+t.from+'</strong> 转给 <strong>'+t.to+'</strong>：<span style="color:#6c63ff;font-weight:700">¥'+t.amount+'</span></div>';
+        return '<div style="padding:8px 12px;background:#fff8e1;border-radius:8px;margin-bottom:6px">💸 <strong>'+escapeHtml(t.from)+'</strong> 转给 <strong>'+escapeHtml(t.to)+'</strong>：<span style="color:#6c63ff;font-weight:700">¥'+escapeHtml(t.amount)+'</span></div>';
       }).join('')
     : '<div class="text-muted" style="padding:8px">无需转账（已完全平衡）</div>';
   document.getElementById('settlePushText').value = generatePushText(s);
@@ -379,14 +388,14 @@ async function loadSettlements() {
   const list = res ? res.data || [] : [];
   document.getElementById('settleListBody').innerHTML = list.map(function(s) {
     return '<tr>' +
-      '<td>'+s.month+'</td>' +
-      '<td>'+(teamsMap[s.team_id]||s.team_id)+'</td>' +
+      '<td>'+escapeHtml(s.month)+'</td>' +
+      '<td>'+escapeHtml(teamsMap[s.team_id]||s.team_id)+'</td>' +
       '<td>¥'+(s.total_income/100).toFixed(2)+'</td>' +
       '<td>¥'+(s.total_expense/100).toFixed(2)+'</td>' +
       '<td>'+(s.year_compare_last  != null ? '¥'+(s.year_compare_last/100).toFixed(2) : '-')+'</td>' +
       '<td>'+(s.year_compare_prev2 != null ? '¥'+(s.year_compare_prev2/100).toFixed(2) : '-')+'</td>' +
       '<td>'+(s.year_compare_prev3 != null ? '¥'+(s.year_compare_prev3/100).toFixed(2) : '-')+'</td>' +
-      '<td>'+(s.pushed_at ? '✅'+s.pushed_at.slice(0,10) : '-')+'</td>' +
+      '<td>'+(s.pushed_at ? '✅'+escapeHtml(s.pushed_at.slice(0,10)) : '-')+'</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="viewSettle(this)" data-id="'+s.id+'">查看明细</button> ' +
         '<button class="btn btn-sm" style="color:#f44;border-color:#f44" onclick="deleteSettle('+s.id+')">删除</button>' +

@@ -29,7 +29,8 @@ function buildToken(user) {
 }
 
 function safeUser(user) {
-  const { password_hash, ...rest } = user;
+  // 密码哈希与京粉密码属于敏感字段，永不进入 API 响应（京粉密码仅本地数据库明文存储，只写不读回）
+  const { password_hash, jingfen_password, ...rest } = user;
   const leaderTeamIds = getLeaderTeamIds(user.id);
   return {
     ...rest,

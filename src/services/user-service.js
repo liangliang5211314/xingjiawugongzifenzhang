@@ -9,6 +9,13 @@ function normalizeTeamIds(team_ids, team_id) {
     : team_id ? [Number(team_id)] : [];
 }
 
+// 返回给 API 的用户对象剔除敏感字段（密码哈希、京粉密码），数据库列保留不动
+function publicUser(user) {
+  if (!user) return user;
+  const { password_hash, jingfen_password, ...rest } = user;
+  return rest;
+}
+
 function assertManageableTeamIds(actor, ids) {
   for (const id of ids) {
     if (!getTeamById(id)) throw new HttpError(404, '团队不存在');
@@ -60,7 +67,7 @@ function createMember(actor, { name, mobile, role, team_ids, team_id, username, 
   });
   if (Object.keys(rest).length > 0) updateUser(user.id, rest);
   if (ids.length > 0) setUserTeams(user.id, ids);
-  return findById(user.id);
+  return publicUser(findById(user.id));
 }
 
 function updateMember(actor, id, fields) {
@@ -85,7 +92,7 @@ function updateMember(actor, id, fields) {
     setUserTeams(id, ids);
   }
 
-  return findById(id);
+  return publicUser(findById(id));
 }
 
 function assertCanDeleteMember(actor, id) {

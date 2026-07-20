@@ -9,6 +9,15 @@ function currentMonthStr() {
   return new Date().toISOString().slice(0, 7);
 }
 
+// 校验当前登录成员是否属于指定团队（user_teams 为准，兼容 users.team_id 旧数据）
+function assertMemberInTeam(user, teamId) {
+  const allowed = new Set([...getUserTeamIds(user.id), user.team_id].filter(Boolean).map(Number));
+  if (!allowed.has(Number(teamId))) {
+    return false;
+  }
+  return true;
+}
+
 // GET /member/me
 function memberMeController(req, res, next) {
   try {
@@ -26,6 +35,9 @@ function memberCurrentIncomeController(req, res, next) {
     if (!user.name) return res.json({ ok: true, data: null, message: '账号未设置姓名' });
     const teamId = req.query.team_id ? Number(req.query.team_id) : null;
     if (!teamId) return res.json({ ok: true, data: null });
+    if (!assertMemberInTeam(user, teamId)) {
+      return res.status(403).json({ ok: false, message: '您不属于该团队，无权查看' });
+    }
     const month = req.query.month || currentMonthStr();
     const records = listRecords({ teamId, month });
     const mine = records.filter(r => r.person_name === user.name)
@@ -58,6 +70,9 @@ function memberIncomeHistoryController(req, res, next) {
     if (!user.name) return res.json({ ok: true, data: [] });
     const teamId = req.query.team_id ? Number(req.query.team_id) : user.team_id;
     if (!teamId) return res.json({ ok: true, data: [] });
+    if (!assertMemberInTeam(user, teamId)) {
+      return res.status(403).json({ ok: false, message: '您不属于该团队，无权查看' });
+    }
     const settlements = listSettlements({ teamId });
     const history = settlements.map(s => {
       const myData = s.result_json?.members?.find(m => m.name === user.name);

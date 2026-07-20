@@ -165,6 +165,15 @@
     var currentTeamId = null;
     var userTeams = [];
 
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function getToken() {
       var hash = location.hash.replace('#','');
       var params = new URLSearchParams(hash);
@@ -205,7 +214,7 @@
       wrap.innerHTML = userTeams.map(function(t) {
         return '<button style="flex:none;padding:6px 16px;border-radius:20px;border:1.5px solid #6c63ff;font-size:13px;cursor:pointer;white-space:nowrap;' +
                (t.id === currentTeamId ? 'background:#6c63ff;color:#fff' : 'background:none;color:#6c63ff') +
-               '" onclick="switchTeam(' + t.id + ')">' + t.name + '</button>';
+               '" onclick="switchTeam(' + t.id + ')">' + escapeHtml(t.name) + '</button>';
       }).join('');
     }
 
@@ -253,7 +262,7 @@
       if (userTeams.length > 1) {
         teamFieldWrap.style.display = 'block';
         document.getElementById('reportTeamSelect').innerHTML = userTeams.map(function(t) {
-          return '<option value="' + t.id + '"' + (t.id === currentTeamId ? ' selected' : '') + '>' + t.name + '</option>';
+          return '<option value="' + t.id + '"' + (t.id === currentTeamId ? ' selected' : '') + '>' + escapeHtml(t.name) + '</option>';
         }).join('');
       } else {
         teamFieldWrap.style.display = 'none';
@@ -335,12 +344,12 @@
           var isExpense = r.item_type === 'expense';
           return '<div class="m-report-item' + (isExpense ? ' m-report-expense' : '') + '">' +
             '<div>' +
-              '<div class="m-report-label">' + r.item_name + '</div>' +
-              '<div class="m-report-meta">已上报 · ' + (r.updated_at||'').slice(0,10) + (r.note ? ' · '+r.note : '') + '</div>' +
+              '<div class="m-report-label">' + escapeHtml(r.item_name) + '</div>' +
+              '<div class="m-report-meta">已上报 · ' + escapeHtml((r.updated_at||'').slice(0,10)) + (r.note ? ' · '+escapeHtml(r.note) : '') + '</div>' +
             '</div>' +
             '<div style="text-align:right">' +
               '<div class="m-report-amount">' + (isExpense ? '-' : '') + '¥' + r.amount.toFixed(2) + '</div>' +
-              (r.screenshot ? '<img src="' + r.screenshot + '" style="margin-top:4px;height:36px;border-radius:4px">' : '') +
+              (r.screenshot ? '<img src="' + escapeHtml(r.screenshot) + '" style="margin-top:4px;height:36px;border-radius:4px">' : '') +
             '</div>' +
           '</div>';
         }).join('');
@@ -461,9 +470,9 @@
       if (d.records && d.records.length) {
         document.getElementById('recordList').innerHTML = d.records.map(function(r) {
           return '<div class="m-record-item">' +
-            '<span class="m-record-type type-' + r.item_type + '">' + (TYPES[r.item_type]||r.item_type) + '</span>' +
-            '<span class="m-record-name">' + (r.item_name||r.item_type) + '</span>' +
-            '<span class="m-record-amount ' + (r.item_type==='expense'?'red':'') + '">¥' + r.amount + '</span>' +
+            '<span class="m-record-type type-' + escapeHtml(r.item_type) + '">' + escapeHtml(TYPES[r.item_type]||r.item_type) + '</span>' +
+            '<span class="m-record-name">' + escapeHtml(r.item_name||r.item_type) + '</span>' +
+            '<span class="m-record-amount ' + (r.item_type==='expense'?'red':'') + '">¥' + escapeHtml(r.amount) + '</span>' +
             '</div>';
         }).join('');
       } else {

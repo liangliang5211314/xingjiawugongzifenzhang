@@ -93,13 +93,22 @@ const pageScript = `<script>
 let records = [], teamsMap = {}, allTeams = [];
 const ITEM_NAMES = { income:'收入', tax:'退税', expense:'支出', adjust:'调整' };
 
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function initPage() {
   const tr = await api('/api/teams');
   allTeams = tr ? tr.data || [] : [];
   teamsMap = Object.fromEntries(allTeams.map(t => [t.id, t.name]));
   ['filterTeam','rTeam'].forEach(function(id) {
     const el = document.getElementById(id);
-    const opt = allTeams.map(t => '<option value="'+t.id+'">'+t.name+'</option>').join('');
+    const opt = allTeams.map(t => '<option value="'+t.id+'">'+escapeHtml(t.name)+'</option>').join('');
     if (id==='filterTeam') el.innerHTML = '<option value="">全部团队</option>' + opt;
     else el.innerHTML = '<option value="">选择团队</option>' + opt;
   });
@@ -124,14 +133,14 @@ async function loadRecords() {
   loadMemberReports(teamId, month);
   document.getElementById('recordBody').innerHTML = records.map(function(r) {
     return '<tr>' +
-      '<td>'+r.month+'</td>' +
-      '<td>'+(teamsMap[r.team_id]||r.team_id)+'</td>' +
-      '<td>'+r.person_name+'</td>' +
-      '<td><span class="badge badge-'+r.item_type+'">'+(ITEM_NAMES[r.item_type]||r.item_type)+'</span></td>' +
-      '<td>'+(r.item_name||'-')+'</td>' +
-      '<td class="'+(r.item_type==='expense'?'text-red':'text-green')+'">¥'+r.amount+'</td>' +
-      '<td>'+(r.payer_name||'-')+'</td>' +
-      '<td>'+(r.note||'-')+'</td>' +
+      '<td>'+escapeHtml(r.month)+'</td>' +
+      '<td>'+escapeHtml(teamsMap[r.team_id]||r.team_id)+'</td>' +
+      '<td>'+escapeHtml(r.person_name)+'</td>' +
+      '<td><span class="badge badge-'+escapeHtml(r.item_type)+'">'+escapeHtml(ITEM_NAMES[r.item_type]||r.item_type)+'</span></td>' +
+      '<td>'+escapeHtml(r.item_name||'-')+'</td>' +
+      '<td class="'+(r.item_type==='expense'?'text-red':'text-green')+'">¥'+escapeHtml(r.amount)+'</td>' +
+      '<td>'+escapeHtml(r.payer_name||'-')+'</td>' +
+      '<td>'+escapeHtml(r.note||'-')+'</td>' +
       '<td>' +
         '<button class="btn btn-sm" onclick="editRecord('+r.id+')">编辑</button> ' +
         '<button class="btn btn-sm btn-danger" onclick="delRecord('+r.id+')">删除</button>' +
@@ -156,7 +165,7 @@ async function loadNameSuggestions(selectedName, selectedPayer) {
   // datalist for rName: 成员 + 其他账户（用分隔线区分）
   var allNames = memberNames.concat(extraNames.filter(function(n){ return memberNames.indexOf(n) === -1; }));
   document.getElementById('rNameList').innerHTML = allNames.map(function(n){
-    return '<option value="' + n + '">';
+    return '<option value="' + escapeHtml(n) + '">';
   }).join('');
   if (selectedName) document.getElementById('rName').value = selectedName;
   else if (!document.getElementById('rName').value) document.getElementById('rName').value = '';
@@ -164,7 +173,7 @@ async function loadNameSuggestions(selectedName, selectedPayer) {
   // payer 仍是 select
   var payerOpts = '<option value="">选择垫付人</option>';
   memberNames.forEach(function(n) {
-    payerOpts += '<option value="'+n+'"'+(n===selectedPayer?' selected':'')+'>'+n+'</option>';
+    payerOpts += '<option value="'+escapeHtml(n)+'"'+(n===selectedPayer?' selected':'')+'>'+escapeHtml(n)+'</option>';
   });
   document.getElementById('rPayer').innerHTML = payerOpts;
 }
@@ -225,14 +234,14 @@ async function loadMemberReports(teamId, month) {
   document.getElementById('memberReportBody').innerHTML = list.length
     ? list.map(function(r) {
         return '<tr>' +
-          '<td><strong>' + (r.user_name||'-') + '</strong></td>' +
-          '<td>' + (r.jingfen_realname||'-') + '</td>' +
+          '<td><strong>' + escapeHtml(r.user_name||'-') + '</strong></td>' +
+          '<td>' + escapeHtml(r.jingfen_realname||'-') + '</td>' +
           '<td style="color:#6c63ff;font-weight:700">¥' + parseFloat(r.amount).toFixed(2) + '</td>' +
-          '<td>' + (r.updated_at||'').slice(0,16) + '</td>' +
+          '<td>' + escapeHtml((r.updated_at||'').slice(0,16)) + '</td>' +
           '<td>' + (r.screenshot
-            ? '<img src="' + r.screenshot + '" style="height:40px;border-radius:4px;cursor:pointer" data-src="' + r.screenshot + '" onclick="showMemberImg(this)">'
+            ? '<img src="' + escapeHtml(r.screenshot) + '" style="height:40px;border-radius:4px;cursor:pointer" data-src="' + escapeHtml(r.screenshot) + '" onclick="showMemberImg(this)">'
             : '-') + '</td>' +
-          '<td>' + (r.note||'-') + '</td>' +
+          '<td>' + escapeHtml(r.note||'-') + '</td>' +
           '</tr>';
       }).join('')
     : '<tr><td colspan="6" style="color:#999">本月暂无成员上报</td></tr>';

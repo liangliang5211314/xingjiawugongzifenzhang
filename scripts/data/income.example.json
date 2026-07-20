@@ -1,0 +1,44 @@
+{
+  "_说明": "本文件是 scripts/data/income.local.json 的格式模板（假数据）。真实数据请复制本文件为 income.local.json 后填写（该文件已在 .gitignore 中，不会被提交）。",
+  "_结构": {
+    "history": "2023-2024 年历史数据，供 scripts/import-history.js 使用",
+    "y2025": "2025 年数据，供 scripts/import-2025.js 使用",
+    "month": "月份，格式 YYYY-MM",
+    "records[].name": "成员姓名，需与系统内姓名一致；外部账号用 其他账号/某宝 等",
+    "records[].amount": "金额，单位元",
+    "records[].itemType": "可选，income（默认）或 expense",
+    "records[].itemName": "可选，收益项目名称，默认 京东收益"
+  },
+  "history": [
+    {
+      "month": "2024-01",
+      "records": [
+        { "name": "张三", "amount": 1000.00 },
+        { "name": "李四", "amount": 2000.50 },
+        { "name": "某宝", "amount": 300.25, "itemName": "淘宝收益" }
+      ]
+    },
+    {
+      "month": "2024-02",
+      "records": [
+        { "name": "张三", "amount": 1100.00, "itemName": "京东收益（2月第一批）" },
+        { "name": "其他账号", "amount": 500.00, "itemName": "其他京粉账号收益" }
+      ]
+    }
+  ],
+  "y2025": [
+    {
+      "month": "2025-01",
+      "records": [
+        { "name": "张三", "amount": 1200.00 },
+        { "name": "李四", "amount": 2100.00 }
+      ]
+    },
+    {
+      "month": "2025-12",
+      "records": [
+        { "name": "某宝", "amount": -100.00, "itemType": "expense", "itemName": "淘宝退款/扣款" }
+      ]
+    }
+  ]
+}

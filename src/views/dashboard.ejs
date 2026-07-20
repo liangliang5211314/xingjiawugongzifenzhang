@@ -16,6 +16,15 @@ const body = `
 </div>
 `;
 const pageScript = `<script>
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 (async function() {
   const data = await api('/api/dashboard');
   if (!data) return;
@@ -26,9 +35,9 @@ const pageScript = `<script>
     { label:'今年总收入', value:'¥'+d.this_year_income },
     { label:'去年总收入', value:'¥'+d.last_year_income },
     { label:'团队数量',   value: d.team_count + ' 个' },
-  ].map(s => '<div class="stat-card"><div class="stat-label">'+s.label+'</div><div class="stat-value">'+s.value+'</div></div>').join('');
+  ].map(s => '<div class="stat-card"><div class="stat-label">'+s.label+'</div><div class="stat-value">'+escapeHtml(s.value)+'</div></div>').join('');
   document.getElementById('teamBody').innerHTML = (d.team_overview||[]).map(t =>
-    '<tr><td>'+t.name+'</td><td>¥'+t.this_month_income+'</td></tr>'
+    '<tr><td>'+escapeHtml(t.name)+'</td><td>¥'+escapeHtml(t.this_month_income)+'</td></tr>'
   ).join('') || '<tr><td colspan="2">暂无数据</td></tr>';
 })();
 </script>`;

@@ -112,3 +112,10 @@ release/
 *.SyncPart
 *.SyncTemp
 *.temporary
+
+# 本地隐私数据（明文只留本地，不入库）
+Z团队收入表.xlsx
+# scripts/data 目录整体被上方 data/ 规则忽略，先恢复目录访问，再仅忽略真实数据文件
+!scripts/data/
+scripts/data/income.local.json
+!scripts/data/income.example.json

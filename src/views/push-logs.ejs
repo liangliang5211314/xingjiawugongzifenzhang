@@ -14,6 +14,15 @@ const body = `
 </div>
 `;
 const pageScript = `<script>
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function loadLogs() {
   const res = await api('/api/push-logs');
   const list = res ? res.data || [] : [];
@@ -21,12 +30,12 @@ async function loadLogs() {
     var resp = '-';
     try { resp = l.response_json ? (JSON.parse(l.response_json).errmsg || 'ok') : '-'; } catch(e){}
     return '<tr>' +
-      '<td>'+(l.created_at ? l.created_at.slice(0,19) : '-')+'</td>' +
-      '<td>'+(l.user_name||'-')+'</td>' +
-      '<td style="font-size:11px">'+((l.openid||'').slice(-8)||'-')+'</td>' +
-      '<td>'+(l.push_type||'-')+'</td>' +
+      '<td>'+(l.created_at ? escapeHtml(l.created_at.slice(0,19)) : '-')+'</td>' +
+      '<td>'+escapeHtml(l.user_name||'-')+'</td>' +
+      '<td style="font-size:11px">'+escapeHtml((l.openid||'').slice(-8)||'-')+'</td>' +
+      '<td>'+escapeHtml(l.push_type||'-')+'</td>' +
       '<td><span class="badge badge-'+(l.status==='success'?'income':'expense')+'">'+(l.status==='success'?'成功':'失败')+'</span></td>' +
-      '<td style="font-size:11px">'+resp+'</td>' +
+      '<td style="font-size:11px">'+escapeHtml(resp)+'</td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="6">暂无日志</td></tr>';
 }

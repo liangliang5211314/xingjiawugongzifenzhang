@@ -2,121 +2,42 @@
  * 导入 2025 年历史收入数据（用于去年同月对比）
  * 运行方式：node scripts/import-2025.js
  * 如需指定团队ID：node scripts/import-2025.js --team-id=2
+ * 数据来源：scripts/data/income.local.json 的 y2025 字段（原始来源：历史记账表）
+ * 数据文件含真实姓名与收入，属于本地隐私文件，已在 .gitignore 中，不会被提交；
+ * 格式参考 scripts/data/income.example.json
  */
 
+const fs = require('fs');
+const path = require('path');
 const { db } = require('../src/config/database');
 
-// ─── 2025 年各月数据（来源：历史记账表）────────────────────────────
+const DATA_FILE = path.join(__dirname, 'data', 'income.local.json');
+
 // 格式：{ month, records: [{ name, amount, itemType?, itemName? }] }
 // amount 单位：元（脚本内部统一乘以100转为分再写入）
-const HISTORY = [
-  {
-    month: '2025-01',
-    records: [
-      { name: '崔紫阳', amount: 5335.07 },
-      { name: '崔海亮', amount: 5737.81 },
-      { name: '崔如意', amount: 8989.19 },
-    ],
-  },
-  {
-    month: '2025-02',
-    records: [
-      { name: '崔紫阳', amount: 4400.60 },
-      { name: '崔海亮', amount: 6423.88 },
-      { name: '崔如意', amount: 10413.06 },
-      { name: '某宝',   amount: 412.89,  itemName: '淘宝收益' },
-    ],
-  },
-  {
-    month: '2025-03',
-    records: [
-      // 第一批（常规）
-      { name: '崔紫阳', amount: 2031.48,  itemName: '京东收益（3月第一批）' },
-      { name: '崔海亮', amount: 2701.83,  itemName: '京东收益（3月第一批）' },
-      { name: '崔如意', amount: 4593.00,  itemName: '京东收益（3月第一批）' },
-      // 第二批（报税批次）
-      { name: '崔紫阳', amount: 10564.64, itemName: '京东收益（3月报税）' },
-      { name: '崔海亮', amount: 4444.07,  itemName: '京东收益（3月报税）' },
-      { name: '崔如意', amount: 11705.12, itemName: '京东收益（3月报税）' },
-    ],
-  },
-  {
-    month: '2025-04',
-    records: [
-      { name: '崔紫阳', amount: 2706.72 },
-      { name: '崔海亮', amount: 3741.26 },
-      { name: '崔如意', amount: 6293.04 },
-    ],
-  },
-  {
-    month: '2025-05',
-    records: [
-      { name: '崔紫阳', amount: 2530.17 },
-      { name: '崔海亮', amount: 3014.82 },
-      { name: '崔如意', amount: 4868.36 },
-      { name: '某宝',   amount: 204.15,  itemName: '淘宝收益' },
-    ],
-  },
-  {
-    month: '2025-06',
-    records: [
-      { name: '崔紫阳', amount: 2886.06 },
-      { name: '崔海亮', amount: 4051.96 },
-      { name: '崔如意', amount: 6182.21 },
-    ],
-  },
-  {
-    month: '2025-07',
-    records: [
-      { name: '崔紫阳', amount: 5507.20 },
-      { name: '崔海亮', amount: 5278.38 },
-      { name: '崔如意', amount: 7827.37 },
-    ],
-  },
-  {
-    month: '2025-08',
-    records: [
-      { name: '崔紫阳', amount: 2915.59 },
-      { name: '崔海亮', amount: 3090.26 },
-      { name: '崔如意', amount: 4960.92 },
-      { name: '某宝',   amount: 355.72,  itemName: '淘宝收益' },
-    ],
-  },
-  {
-    month: '2025-09',
-    records: [
-      { name: '崔紫阳', amount: 2090.22 },
-      { name: '崔海亮', amount: 2743.77 },
-      { name: '崔如意', amount: 3946.24 },
-      { name: '某宝',   amount: 338.49,  itemName: '淘宝收益' },
-    ],
-  },
-  {
-    month: '2025-10',
-    records: [
-      { name: '崔紫阳', amount: 2734.90 },
-      { name: '崔海亮', amount: 4155.70 },
-      { name: '崔如意', amount: 6115.62 },
-    ],
-  },
-  {
-    month: '2025-11',
-    records: [
-      { name: '崔紫阳', amount: 6131.51 },
-      { name: '崔海亮', amount: 6252.85 },
-      { name: '崔如意', amount: 9254.58 },
-    ],
-  },
-  {
-    month: '2025-12',
-    records: [
-      { name: '崔紫阳', amount: 6622.98 },
-      { name: '崔海亮', amount: 6744.96 },
-      { name: '崔如意', amount: 9812.69 },
-      { name: '某宝',   amount: -2093.00, itemType: 'expense', itemName: '淘宝退款/扣款' },
-    ],
-  },
-];
+function loadHistory() {
+  if (!fs.existsSync(DATA_FILE)) {
+    console.error(`❌ 未找到数据文件：${DATA_FILE}`);
+    console.error('   该文件包含真实收入数据，属于本地隐私文件（已在 .gitignore 中，不随仓库分发）。');
+    console.error('   请从数据保管人处获取 income.local.json 并放到 scripts/data/ 目录，');
+    console.error('   或参照 scripts/data/income.example.json 的格式自行填写。');
+    process.exit(1);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  } catch (e) {
+    console.error(`❌ 数据文件 JSON 解析失败：${DATA_FILE}\n   ${e.message}`);
+    process.exit(1);
+  }
+  if (!Array.isArray(parsed.y2025)) {
+    console.error(`❌ 数据文件缺少 y2025 数组字段：${DATA_FILE}（格式参考 income.example.json）`);
+    process.exit(1);
+  }
+  return parsed.y2025;
+}
+
+const HISTORY = loadHistory();
 
 // ─── 解析 --team-id 参数 ───────────────────────────────────────────
 function getTeamId() {

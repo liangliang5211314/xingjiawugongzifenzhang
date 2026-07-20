@@ -15,17 +15,32 @@ const { submitReportController, getMyReportController, listReportsController } =
 const { listPushLogs } = require('../models/push-log-model');
 const { getSettlementById } = require('../models/settlement-model');
 
+// 允许的图片扩展名白名单（大小写不敏感）；存储文件名使用服务端生成的安全文件名
+const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+
+function safeImageExt(originalname) {
+  const ext = path.extname(originalname || '').toLowerCase();
+  return ALLOWED_IMAGE_EXTS.has(ext) ? ext : null;
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: path.join(__dirname, '..', '..', 'public', 'uploads'),
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname) || '.jpg';
+      const ext = safeImageExt(file.originalname) || '.jpg';
       cb(null, Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext);
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    cb(null, file.mimetype.startsWith('image/'));
+    // mimetype 与扩展名双重校验：必须是 image/* 且扩展名在白名单内
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      return cb(new Error('只允许上传图片文件'));
+    }
+    if (!safeImageExt(file.originalname)) {
+      return cb(new Error('仅支持 .jpg/.jpeg/.png/.gif/.webp 格式的图片'));
+    }
+    cb(null, true);
   },
 });
 
