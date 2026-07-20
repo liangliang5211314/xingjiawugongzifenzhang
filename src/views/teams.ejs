@@ -313,7 +313,7 @@ async function showTeamForm(team) {
   renderReportMembers(currentFormMembers, team ? (team.report_member_names || []) : []);
   renderLeaderOptions(currentFormMembers, team ? team.leader_user_id : null);
   document.getElementById('tExtraAccounts').value = team && team.extra_accounts && team.extra_accounts.length
-    ? team.extra_accounts.join('\n') : '';
+    ? team.extra_accounts.join('\\n') : '';
   document.getElementById('teamFormWrap').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -340,7 +340,7 @@ function editTeam(id) {
     wecom_webhook_url: document.getElementById('tWecomWebhook').value.trim() || null,
     auto_settle_enabled: document.getElementById('tAutoSettle').checked ? 1 : 0,
     auto_push_enabled: document.getElementById('tAutoPush').checked ? 1 : 0,
-    extra_accounts: document.getElementById('tExtraAccounts').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+    extra_accounts: document.getElementById('tExtraAccounts').value.split('\\n').map(function(s) { return s.trim(); }).filter(Boolean),
   };
 
   if (currentMe && currentMe.user && currentMe.user.role === 'admin') {
