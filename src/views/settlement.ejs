@@ -360,13 +360,32 @@ function generatePushText(s) {
   return lines.join('\\n');
 }
 
-function copyPushText(btn) {
+async function copyPushText(btn) {
   var ta = document.getElementById('settlePushText');
-  navigator.clipboard.writeText(ta.value).catch(function() {
-    ta.select(); document.execCommand('copy');
-  });
-  btn.textContent = '已复制 ✓';
-  btn.style.background = '#4caf50';
+  var copied = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(ta.value);
+      copied = true;
+    }
+  } catch (e) {}
+
+  if (!copied) {
+    var copyArea = document.createElement('textarea');
+    copyArea.value = ta.value;
+    copyArea.setAttribute('readonly', 'readonly');
+    copyArea.style.position = 'fixed';
+    copyArea.style.top = '-9999px';
+    document.body.appendChild(copyArea);
+    copyArea.focus();
+    copyArea.select();
+    copyArea.setSelectionRange(0, copyArea.value.length);
+    try { copied = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(copyArea);
+  }
+
+  btn.textContent = copied ? '已复制 ✓' : '复制失败';
+  btn.style.background = copied ? '#4caf50' : '#f44336';
   setTimeout(function() { btn.textContent = '复制'; btn.style.background = '#6c63ff'; }, 1800);
 }
 
