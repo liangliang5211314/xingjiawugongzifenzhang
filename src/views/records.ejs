@@ -91,6 +91,7 @@ const body = `
 `;
 const pageScript = `<script>
 let records = [], teamsMap = {}, allTeams = [];
+let nameBeforeReselect = '';
 const ITEM_NAMES = { income:'收入', tax:'退税', expense:'支出', adjust:'调整' };
 
 function escapeHtml(value) {
@@ -100,6 +101,12 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// 本地时区当前月份（toISOString 是 UTC，月初早晨会错月）
+function currentMonthStr() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
 async function initPage() {
@@ -112,8 +119,8 @@ async function initPage() {
     if (id==='filterTeam') el.innerHTML = '<option value="">全部团队</option>' + opt;
     else el.innerHTML = '<option value="">选择团队</option>' + opt;
   });
-  document.getElementById('rMonth').value = new Date().toISOString().slice(0,7);
-  document.getElementById('filterMonth').value = new Date().toISOString().slice(0,7);
+  document.getElementById('rMonth').value = currentMonthStr();
+  document.getElementById('filterMonth').value = currentMonthStr();
   loadRecords();
 }
 
@@ -188,7 +195,7 @@ async function showRecordForm(r) {
   document.getElementById('rFormTitle').textContent = r ? '编辑记录' : '新增记录';
   document.getElementById('rId').value = r ? r.id : '';
   document.getElementById('rTeam').value = r ? r.team_id : (allTeams[0] ? allTeams[0].id : '');
-  document.getElementById('rMonth').value = r ? r.month : new Date().toISOString().slice(0,7);
+  document.getElementById('rMonth').value = r ? r.month : currentMonthStr();
   document.getElementById('rItemType').value = r ? r.item_type : 'income';
   document.getElementById('rItemName').value = r ? r.item_name||'' : '';
   document.getElementById('rAmount').value = r ? Math.abs(r.amount) : '';
@@ -198,6 +205,24 @@ async function showRecordForm(r) {
 }
 function hideRecordForm() { document.getElementById('recordFormWrap').style.display = 'none'; }
 function editRecord(id) { showRecordForm(records.find(r => r.id===id)); }
+
+// 已填写姓名时，点击输入框先暂时清空筛选，让 datalist 展示全部候选项。
+// 如果用户没有改选姓名就离开输入框，则恢复原值。
+const nameInput = document.getElementById('rName');
+nameInput.addEventListener('pointerdown', function() {
+  if (!nameInput.value) return;
+  nameBeforeReselect = nameInput.value;
+  nameInput.value = '';
+});
+nameInput.addEventListener('input', function() {
+  nameBeforeReselect = '';
+});
+nameInput.addEventListener('blur', function() {
+  setTimeout(function() {
+    if (!nameInput.value && nameBeforeReselect) nameInput.value = nameBeforeReselect;
+    nameBeforeReselect = '';
+  }, 0);
+});
 
 async function delRecord(id) {
   if (!confirm('确认删除此记录？')) return;

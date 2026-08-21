@@ -1,17 +1,7 @@
 const { db } = require('../config/database');
 const { fromCents } = require('../utils/money');
+const { currentMonth, prevMonth } = require('../utils/date');
 const { getAllTeams } = require('../models/team-model');
-
-// 当前月份 YYYY-MM
-function currentMonth() {
-  return new Date().toISOString().slice(0, 7);
-}
-
-function prevMonth() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  return d.toISOString().slice(0, 7);
-}
 
 function currentYear() {
   return new Date().getFullYear().toString();

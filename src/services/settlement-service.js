@@ -3,7 +3,7 @@ const { listUsers } = require('../models/user-model');
 const { getRecordsByTeamAndMonth, sumIncomeByTeamMonth, sumIncomeByPersonMonth, getPersonNames } = require('../models/record-model');
 const { getSettlement, getSettlementById, listSettlements, saveSettlement, markPushed, getMonthTotalIncome } = require('../models/settlement-model');
 const { HttpError } = require('../utils/http-error');
-const { toCents } = require('../utils/money');
+const { fromCents } = require('../utils/money');
 const { calculateSettlement } = require('../utils/settlement');
 
 // 获取年同比数据（优先从settlements，否则从income_records聚合）
@@ -40,7 +40,14 @@ function runSettlement(teamId, month) {
   result.month = month;
 
   const totalIncomeCents  = records.filter(r => r.item_type === 'income').reduce((s, r) => s + r.amount, 0);
-  const totalExpenseCents = records.filter(r => r.item_type === 'expense').reduce((s, r) => s + Math.abs(r.amount), 0);
+  const expenseRecords = records.filter(r => r.item_type === 'expense');
+  const totalExpenseCents = expenseRecords.reduce((s, r) => s + Math.abs(r.amount), 0);
+  result.expense_items = expenseRecords.map(r => ({
+    item_name: r.item_name || '未命名支出',
+    amount: fromCents(Math.abs(r.amount)),
+    payer_name: r.payer_name || '',
+    note: r.note || '',
+  }));
 
   const { last, prev2, prev3 } = fetchYearCompare(teamId, month);
 

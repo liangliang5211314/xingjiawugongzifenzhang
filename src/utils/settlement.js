@@ -1,14 +1,34 @@
+const { Parser } = require('expr-eval');
 const { fromCents, roundShare } = require('./money');
 const { getRuleMembers } = require('../models/team-rule-member-model');
 const { HttpError } = require('./http-error');
 
-function evalFormula(formula, vars) {
+const formulaParser = new Parser();
+const FORMULA_VARS = ['income', 'tax', 'expense', 'adjust', 'distributable'];
+
+// 用 expr-eval 安全解析成员分成公式（禁止使用 new Function 执行任意代码）
+function evalFormula(formula, vars, memberName) {
+  let expr;
   try {
-    const fn = new Function('income', 'tax', 'expense', 'adjust', 'distributable',
-      'return (' + formula + ')');
-    const result = fn(vars.income, vars.tax, vars.expense, vars.adjust, vars.distributable);
-    return typeof result === 'number' && isFinite(result) ? Math.round(result) : 0;
-  } catch (e) { return 0; }
+    expr = formulaParser.parse(formula);
+  } catch (e) {
+    throw new HttpError(400, `成员「${memberName}」的分成公式无法解析：${formula}（${e.message}）`);
+  }
+  const unknown = expr.variables({ withMembers: true }).filter(v => !FORMULA_VARS.includes(v));
+  if (unknown.length > 0) {
+    throw new HttpError(400,
+      `成员「${memberName}」的分成公式包含不支持的变量：${unknown.join('、')}（可用变量：${FORMULA_VARS.join('、')}）`);
+  }
+  let result;
+  try {
+    result = expr.evaluate(vars);
+  } catch (e) {
+    throw new HttpError(400, `成员「${memberName}」的分成公式计算失败：${formula}（${e.message}）`);
+  }
+  if (typeof result !== 'number' || !isFinite(result)) {
+    throw new HttpError(400, `成员「${memberName}」的分成公式结果不是有效数值：${formula}`);
+  }
+  return Math.round(result);
 }
 
 function calcFromRuleMembers(ruleMembers, personNames, vars) {
@@ -19,7 +39,7 @@ function calcFromRuleMembers(ruleMembers, personNames, vars) {
     if (!rm) { result.set(name, 0); return; }
     let share = 0;
     if (rm.rule_mode === 'formula' && rm.formula) {
-      share = evalFormula(rm.formula, vars);
+      share = evalFormula(rm.formula, vars, name);
     } else if (rm.ratio != null) {
       share = roundShare(vars.distributable, Number(rm.ratio));
     }
@@ -92,13 +112,19 @@ function splitEvenly(totalCents, count) {
 }
 
 // standard规则：leader拿比例，其余平分
-function calcStandard(team, personNames, distributableCents) {
+function calcStandard(team, personNames, distributableCents, warnings) {
   const config = team.rule_config || {};
   const result = new Map();
 
   // custom分配：rule_config.allocations = [{name, ratio}]
   if (config.strategy === 'fixed-ratios' || team.rule_type === 'custom') {
     const allocations = Array.isArray(config.allocations) ? config.allocations : [];
+    const ratioSum = allocations.reduce((s, a) => s + Number(a.ratio || 0), 0);
+    if (allocations.length > 0 && Math.abs(ratioSum - 1) > 0.001 && warnings) {
+      warnings.push(
+        `固定比例之和为 ${(ratioSum * 100).toFixed(2)}%（不等于 100%），差额已归入最后一位成员，请检查团队分账规则配置`
+      );
+    }
     const ratioMap = new Map(allocations.map(a => [a.name, Number(a.ratio || 0)]));
     let assigned = 0;
     const raw = personNames.map(name => {
@@ -133,7 +159,7 @@ function calcStandard(team, personNames, distributableCents) {
 }
 
 // zteam规则：leader = 总收入×ratio + 报销；其余平分剩余
-function calcZteam(team, personNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents) {
+function calcZteam(team, personNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents, warnings) {
   const config = team.rule_config || {};
   const leaderName = config.leader_name || '';
   const leaderRatio = Number(config.leader_ratio ?? 0.2);
@@ -143,7 +169,7 @@ function calcZteam(team, personNames, totalIncomeCents, totalTaxCents, totalExpe
   const hasLeader = personNames.includes(leaderName);
   if (!hasLeader) {
     const dist = totalIncomeCents - totalTaxCents + totalAdjustCents;
-    return calcStandard(team, personNames, dist);
+    return calcStandard(team, personNames, dist, warnings);
   }
 
   const others = personNames.filter(n => n !== leaderName);
@@ -177,6 +203,8 @@ function calculateSettlement(team, personNames, records, jdAccountMap) {
   let shouldGetMap;
   // 最终参与分账的成员名单（公式模式下会扩充）
   let finalPersonNames = [...personNames];
+  // 结算过程中的非阻断性提示（如固定比例之和≠100%）
+  const warnings = [];
 
   const ruleMembers = team.id ? getRuleMembers(team.id) : [];
   if (ruleMembers.length > 0) {
@@ -215,10 +243,10 @@ function calculateSettlement(team, personNames, records, jdAccountMap) {
 
   } else if (team.rule_type === 'zteam') {
     // zteam: should_get 里已含 leader 报销；sum(should_get) = income - tax + adjust
-    shouldGetMap = calcZteam(team, finalPersonNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents);
+    shouldGetMap = calcZteam(team, finalPersonNames, totalIncomeCents, totalTaxCents, totalExpenseCents, totalAdjustCents, warnings);
   } else {
     // standard/custom: distributable 已扣除 expense；再逐条把 expense 还给实际垫付人
-    shouldGetMap = calcStandard(team, finalPersonNames, distributableCents);
+    shouldGetMap = calcStandard(team, finalPersonNames, distributableCents, warnings);
     records.filter(r => r.item_type === 'expense').forEach(r => {
       const amt = Math.abs(r.amount);
       shouldGetMap.set(r.person_name, (shouldGetMap.get(r.person_name) || 0) + amt);
@@ -259,6 +287,7 @@ function calculateSettlement(team, personNames, records, jdAccountMap) {
     transfers:     jdAccountMap
       ? buildTransfersByJdAccount(memberSettlements, jdAccountMap)
       : buildTransfers(memberSettlements),
+    warnings,
   };
 }
 

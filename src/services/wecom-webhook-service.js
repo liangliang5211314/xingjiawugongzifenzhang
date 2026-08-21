@@ -49,6 +49,18 @@ function buildMarkdown(team, settlement) {
   if (parseFloat(r.total_tax    || 0) > 0) lines.push(`> 退　税：¥${fmt(r.total_tax)}`);
   lines.push(`> 可分配：¥${fmt(r.distributable)}`);
 
+  // 支出明细
+  if (Array.isArray(r.expense_items) && r.expense_items.length > 0) {
+    lines.push('---');
+    lines.push('**🧾 支出明细**');
+    r.expense_items.forEach((item, index) => {
+      lines.push(`> ${index + 1}. ${item.item_name || '未命名支出'}：¥${fmt(item.amount)}`);
+      lines.push(`> 支出人：${item.payer_name || '未填写'}`);
+      lines.push(`> 备注：${item.note || '无'}`);
+    });
+    lines.push(`> 合计：¥${fmt(r.total_expense)}`);
+  }
+
   // 同比
   const parts = settlement.month.split('-');
   const yr = Number(parts[0]), mn = parts[1];

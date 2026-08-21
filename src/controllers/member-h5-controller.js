@@ -4,9 +4,10 @@ const { listRecords } = require('../models/record-model');
 const { listSettlements } = require('../models/settlement-model');
 const { safeUser } = require('../services/auth-service');
 const { fromCents } = require('../utils/money');
+const { currentMonth } = require('../utils/date');
 
 function currentMonthStr() {
-  return new Date().toISOString().slice(0, 7);
+  return currentMonth();
 }
 
 // 校验当前登录成员是否属于指定团队（user_teams 为准，兼容 users.team_id 旧数据）

@@ -161,7 +161,7 @@
   <script>
     var token = '';
     var currentUser = null;
-    var currentMonth = new Date().toISOString().slice(0,7);
+    var currentMonth = localMonthStr();
     var currentTeamId = null;
     var userTeams = [];
 
@@ -172,6 +172,12 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    // 本地时区月份（toISOString 是 UTC，月初早晨会错月）
+    function localMonthStr(d) {
+      d = d || new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     }
 
     function getToken() {
@@ -201,7 +207,7 @@
     function nextMonth() {
       var parts = currentMonth.split('-').map(Number);
       var y = parts[0], m = parts[1];
-      var today = new Date().toISOString().slice(0,7);
+      var today = localMonthStr();
       var next = m === 12 ? (y+1)+'-01' : y+'-'+(m+1).toString().padStart(2,'0');
       if (next > today) return;
       currentMonth = next;

@@ -58,13 +58,19 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+// 本地时区当前月份（toISOString 是 UTC，月初早晨会错月）
+function currentMonthStr() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
 async function initPage() {
   const tr = await api('/api/teams');
   allTeams = tr ? tr.data || [] : [];
   document.getElementById('filterTeam').innerHTML =
     '<option value="">全部团队</option>' +
     allTeams.map(function(t){ return '<option value="'+t.id+'">'+escapeHtml(t.name)+'</option>'; }).join('');
-  document.getElementById('filterMonth').value = new Date().toISOString().slice(0,7);
+  document.getElementById('filterMonth').value = currentMonthStr();
   loadReports();
 }
 
