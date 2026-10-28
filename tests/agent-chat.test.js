@@ -54,6 +54,62 @@ beforeEach(()=>{
 });
 after(()=>db.close());
 
+function withUnderstanding(interpret){return createAgentChatService({db,accountId:ACCOUNT,ownerId:OWNER,clock:()=>now,interpret,
+  backend:{addRecord:recordService.addRecord,editRecord:recordService.editRecord,fetchSettlement:getSettlement,previewSettlement:settlement.previewSettlement,runSettlement:settlement.runSettlement}});}
+
+test('ordinary month names and lowercase team aliases need no prescribed format',()=>{
+  assert.match(service.chat(request('z组今年十月收入多少')).message,/2026-10\n收入 ¥11517\.63/);
+  assert.match(service.chat(request('前一个月呢')).message,/2026-09\n收入 ¥1815\.04/);
+  assert.match(service.chat(request('Z队这个月的支出')).message,/服务器 ¥528\.00；垫付 崔海亮/);
+  assert.match(service.chat(request('z团队收入')).message,/2026-10\n收入 ¥11517\.63/);
+  const needTeam=service.chat(request('十月收入多少',{conversation_id:'new-one'}));assert.equal(needTeam.status,'need_input');assert.doesNotMatch(needTeam.message,/YYYY|有权限|格式/);
+  assert.match(service.chat(request('z队呢',{conversation_id:'new-one'})).message,/11517\.63/);
+});
+
+test('model understands only the permitted read scope and the real ledger supplies amounts',async()=>{
+  let calls=0;const understood=withUnderstanding(async input=>{calls++;assert.equal(input.today,'2026-10-28');assert.deepEqual(Object.keys(input).sort(),['previous','teams','text','today']);
+    assert.equal(input.text,'今年十月z组进了多少，帮我瞅瞅');return {type:'summary',team_id:1,month:'2026-10'};});
+  const envelope=request('今年十月z组进了多少，帮我瞅瞅'),before=count('income_records');
+  const answer=await understood.respond(envelope);assert.equal(answer.understanding_source,'deepseek');assert.match(answer.message,/收入 ¥11517\.63；支出 ¥1608\.00/);
+  assert.deepEqual(await understood.respond(envelope),answer);assert.equal(calls,1);assert.equal(count('income_records'),before);
+  assert.equal(understood.authorizeResponse({...envelope,text:''}).allowed,true);
+});
+
+test('model ambiguity asks naturally and cannot invent a team, money or a write operation',async()=>{
+  for(const plan of [{type:'clarify',missing:'month'},{type:'summary',team_id:999,month:'2026-10'},
+    {type:'summary',team_id:1,month:'2026-10',amount:999999},{type:'create_record',team_id:1,month:'2026-10',fields:{amount:'999'}}]){
+    const understood=withUnderstanding(async()=>plan),answer=await understood.respond(request('帮我瞅瞅那一笔'));
+    assert.equal(answer.status,'need_input');assert.doesNotMatch(answer.message,/YYYY|999|¥/);
+  }
+  assert.equal(count('agent_chat_confirmations'),0);assert.equal(count('agent_chat_tasks'),0);
+});
+test('a natural clarification retains the question when the user supplies only the team',async()=>{
+  const understood=withUnderstanding(async input=>input.previous.type?{type:'summary',team_id:1,month:input.previous.month}:{type:'clarify',missing:'team'});
+  assert.equal((await understood.respond(request('十月收入多少'))).status,'need_input');
+  assert.match((await understood.respond(request('z队呢'))).message,/2026-10\n收入 ¥11517\.63/);
+});
+
+test('understanding cannot expand member access, and permissions are checked again after waiting',async()=>{
+  let supplied;const understood=withUnderstanding(async input=>{supplied=input;return {type:'summary',team_id:2,month:'2026-10'};});
+  const denied=await understood.respond(request('帮我查查',{from_user:'wxid-r'}));assert.equal(denied.status,'need_input');assert.deepEqual(supplied.teams.map(t=>t.id),[1]);
+  const revoked=withUnderstanding(async()=>{db.prepare("UPDATE users SET status=0 WHERE id=3").run();return {type:'summary',team_id:1,month:'2026-10'};});
+  await assert.rejects(revoked.respond(request('看下今年十月收益',{from_user:'wxid-r'})),/尚未绑定/);
+});
+
+test('understanding failure keeps ordinary queries working and never confirms a write',async()=>{
+  let calls=0;const understood=withUnderstanding(async()=>{calls++;throw new Error('private-model-error');});
+  const answer=await understood.respond(request('z队10月份收入多少'));assert.match(answer.message,/11517\.63/);assert.equal(answer.understanding_source,'rules');
+  const preview=await understood.respond(request('',{command:proposal()}));assert.equal(preview.status,'needs_confirmation');
+  const before=calls;assert.equal((await understood.respond(request('好的'))).status,'answered');assert.equal(calls,before);
+});
+
+test('concurrent duplicate queries reuse one interpretation and reject a changed original message',async()=>{
+  let finish,calls=0;const understood=withUnderstanding(()=>{calls++;return new Promise(resolve=>{finish=resolve;});});
+  const envelope=request('帮我看看十月z组的进账'),first=understood.respond(envelope),second=understood.respond(envelope);
+  await assert.rejects(understood.respond({...envelope,text:'changed'}),/request_id/);finish({type:'summary',team_id:1,month:'2026-10'});
+  assert.deepEqual(await first,await second);assert.equal(calls,1);assert.equal(count('agent_chat_requests'),1);
+});
+
 test('envelope validates namespace, identities, time and rejects client-supplied authority',()=>{
   for(const patch of [{agent_id:'business'},{from_user:''},{group_id:null},{received_at:'2026-10-28'},{role:'admin'}])assert.throws(()=>validateEnvelope(request('',patch)));
   assert.throws(()=>service.chat(request('查收入',{from_user:'unknown'})),/尚未绑定/);
@@ -158,10 +214,11 @@ test('source changes, expiration and revoked rights prevent confirmation',()=>{
 });
 
 test('bindings require an active administrator and rebinding invalidates old context',()=>{
-  service.chat(request('Z团队2026-10工资',{from_user:'wxid-r'}));
+  service.chat(request('Z团队2026-09工资',{from_user:'wxid-r'}));
   assert.throws(()=>service.bind({account_id:ACCOUNT,from_user:'wxid-r',user_id:4},3),/管理员/);
   assert.throws(()=>bind('wxid-r',4),/原 user_id/);bind('wxid-r',4,true,false,3);
-  assert.equal(service.chat(request('工资',{from_user:'wxid-r'})).status,'need_input');
+  const answer=service.chat(request('工资',{from_user:'wxid-r'}));
+  assert.equal(answer.status,'answered');assert.match(answer.message,/2026-10.*崔海亮/s);assert.doesNotMatch(answer.message,/崔如意|2026-09/);
 });
 
 test('cached results are not exposed after role, membership or team status changes',()=>{
@@ -262,7 +319,7 @@ test('money and unsupported operations are rejected before any preview or write'
 });
 
 test('HTTP contract authenticates separately and isolates adapter failures',async t=>{
-  const app=express();let broken=false;const stub=new Proxy(service,{get(target,key){if(key==='chat'&&broken)return ()=>{throw new Error('PRIVATE_STACK_OR_KEY')};return target[key];}});
+  const app=express();let broken=false;const stub=new Proxy(service,{get(target,key){if(['chat','respond'].includes(key)&&broken)return ()=>{throw new Error('PRIVATE_STACK_OR_KEY')};return target[key];}});
   app.use('/api/internal/agent',createInternalAgentRouter({service:stub,settings:()=>({token,accountId:ACCOUNT,jwtSecret:'different-jwt-secret'})}));app.get('/business-health',(req,res)=>res.json({ok:true}));
   const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>{server.closeAllConnections();server.close();});
   const origin=`http://127.0.0.1:${server.address().port}`,post=(path,body,auth=token)=>fetch(origin+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${auth}`},body:JSON.stringify(body)});

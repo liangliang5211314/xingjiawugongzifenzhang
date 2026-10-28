@@ -37,7 +37,7 @@ function validateEnvelope(input, { query = false } = {}) {
 }
 
 function createAgentChatService({ db, backend, accountId, ownerId = 'ZML741213442', baseUrl = '',
-  clock = () => new Date(), schedule = fn => setImmediate(fn), onError = () => {} }) {
+  clock = () => new Date(), schedule = fn => setImmediate(fn), onError = () => {}, interpret }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS agent_chat_bindings (
       account_id TEXT NOT NULL,from_user TEXT NOT NULL,user_id INTEGER NOT NULL REFERENCES users(id),
@@ -139,9 +139,9 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
     else if (/^修改(?:收入|支出)/.test(text)) type='update_record';
     else if (/异常|重复|对账/.test(text)) type='anomalies';
     else if (/工资|分账|分成|应收|结算/.test(text)) type='salary';
-    else if (/支出|开销|费用/.test(text)) type='expenses';
-    else if (/收入|收益|收支|统计/.test(text)) type='summary';
-    else if (/^(?:那|那么)?(?:上个?月|本月|这个月|[ZYLMF]团队|性价屋[ZYLMF]团队)(?:呢|的呢)?[？?。\s]*$/i.test(text)) type=previous.type || 'summary';
+    else if (/支出|开销|费用|垫付|垫的钱/.test(text)) type='expenses';
+    else if (/收入|收益|收支|统计|进账|进了多少|赚了多少/.test(text)) type='summary';
+    else if (previous.type && /^(?:那|那么)?(?:上个?月|前一个月|本月|这个月|(?:今年|去年)?[一二三四五六七八九十\d]{1,3}月份?|[ZYLMF](?:团队|队|组)|性价屋[ZYLMF]团队)(?:呢|的呢)?[？?。\s]*$/i.test(text)) type=previous.type;
     else return {type:'unknown'};
     const action={type,team_id:previous.team_id,month:previous.month};
     if (['create_record','update_record'].includes(type)) {
@@ -160,16 +160,26 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
         if(record){action.team_id=record.team_id;action.month=record.month;}
       }
     }
-    const matched=db.prepare('SELECT id,name FROM teams').all().filter(t=> text.includes(t.name) || text.includes(t.name.replace(/^性价屋/,'')));
+    const lower=text.toLowerCase();
+    const matched=db.prepare('SELECT id,name FROM teams').all().filter(t=>{
+      const name=t.name.toLowerCase(),short=name.replace(/^性价屋/,'');
+      return lower.includes(name)||lower.includes(short)||/^[a-z]团队$/.test(short)&&new RegExp(short[0]+'(?:队|组)(?![a-z])','i').test(lower);
+    });
     if (matched.length > 1) return {type:'ambiguous'};
     if (matched.length) action.team_id=matched[0].id;
     const explicit=text.match(/(20\d{2})[-年](\d{1,2})月?/);
     if (explicit) action.month=`${explicit[1]}-${explicit[2].padStart(2,'0')}`;
     const now=new Date(clock().getTime()+8*3600000);
-    if (/上个?月/.test(text)) {
+    if (/上个?月|前一个月/.test(text)) {
       const anchor = previous.month && MONTH.test(previous.month) ? previous.month : now.toISOString().slice(0,7);
       const date=new Date(`${anchor}-01T00:00:00Z`);date.setUTCMonth(date.getUTCMonth()-1);action.month=date.toISOString().slice(0,7);
     } else if (/本月|这个月/.test(text)) action.month=now.toISOString().slice(0,7);
+    else if(!explicit && QUERIES.has(type)){
+      const named=text.match(/(?:^|[^\d])([一二三四五六七八九十]{1,3}|\d{1,2})月份?/);
+      if(named){const cn=['','一','二','三','四','五','六','七','八','九','十','十一','十二'],month=/^\d+$/.test(named[1])?Number(named[1]):cn.indexOf(named[1]);
+        if(month>=1&&month<=12){let year=Number(text.match(/(20\d{2})年/)?.[1]||(previous.month||now.toISOString()).slice(0,4));if(/今年|去年|前年/.test(text))year=now.getUTCFullYear()-(/前年/.test(text)?2:/去年/.test(text)?1:0);action.month=`${year}-${String(month).padStart(2,'0')}`;}}
+      else if(!action.month)action.month=now.toISOString().slice(0,7);
+    }
     return action;
   }
   function validateFields(actor, action) {
@@ -304,7 +314,7 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
     // Scheduling happens after the request transaction commits (see chat).
     return response(request,'running','任务已受理；请按原任务编号查询进度，不要重新提交。',{task_id:taskId});
   }
-  function chat(input) {
+  function chat(input, resolved) {
     const request=validateEnvelope(input),actor=actorFor(request),key=contextKey(request,actor);
     const accessHash=hash([actor.access_hash,key]);
     const old=db.prepare('SELECT * FROM agent_chat_requests WHERE request_id=?').get(request.request_id);
@@ -313,27 +323,60 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
     const result=db.transaction(()=>{
       let result;
       const previous=JSON.parse(db.prepare('SELECT context_json FROM agent_chat_contexts WHERE context_key=?').get(key)?.context_json||'{}');
-      const action=parse(request,previous);
+      const action=resolved?.action || parse(request,previous);
       if(request.group_id) result=response(request,'need_input','为保护财务隐私，请私聊助理2继续查询或确认；本群不返回工资明细或执行写操作。');
       else if(['confirm','cancel'].includes(action.type))result=confirm(request,actor,key,action);
       else if(action.type==='reminders'){
         db.prepare('UPDATE agent_chat_bindings SET notifications_enabled=?,updated_at=? WHERE account_id=? AND from_user=?').run(action.enabled?1:0,stamp(),accountId,request.from_user);
         if(!action.enabled)db.prepare("UPDATE agent_chat_notifications SET state='suppressed',updated_at=? WHERE account_id=? AND from_user=? AND state='queued'").run(stamp(),accountId,request.from_user);
         result=response(request,'answered',`主动财务提醒已${action.enabled?'开启':'关闭'}；不影响你主动查询。`);
-      }else if(![...QUERIES,...WRITES].includes(action.type))result=response(request,'need_input',action.type==='write_help'?'请明确字段，例如：新增支出 团队=Z团队 月份=2026-10 成员=崔海亮 项目=服务器 金额=528 垫付人=崔海亮 备注=续费。修改可用“修改支出 编号=台账编号 金额=600”。提交后仍须预览确认。':'请明确财务问题、团队和月份，例如“Z团队2026-10收入”或“上个月呢”。');
+      }else if(![...QUERIES,...WRITES].includes(action.type))result=response(request,'need_input',action.type==='write_help'?'这笔收支属于哪个团队、哪个月？请再告诉我成员、项目、金额；支出还需要说明谁垫付。保存前会先给你核对。':action.type==='ambiguous'||action.missing==='team'?'你想查哪个团队？请选一个，我接着查。':action.missing==='month'?'你想查哪个月？说“十月”或“上个月”就可以。':'你想了解收入、支出，还是成员分账？直接说就可以。');
       else{
         if(!action.team_id){const teams=db.prepare('SELECT id FROM teams WHERE status=1').all().filter(t=>canManageTeam(actor,t.id)||actor.member_team_ids.includes(t.id));if(teams.length===1)action.team_id=teams[0].id;}
-        if(!action.team_id || !MONTH.test(action.month))result=response(request,'need_input','请明确有权限的团队和 YYYY-MM 月份，不自动猜结算期。');
+        if(!action.team_id || !MONTH.test(action.month)){
+          if(QUERIES.has(action.type))db.prepare('INSERT INTO agent_chat_contexts VALUES(?,?,?) ON CONFLICT(context_key) DO UPDATE SET context_json=excluded.context_json,updated_at=excluded.updated_at').run(key,JSON.stringify({type:action.type,...(MONTH.test(action.month)?{month:action.month}:{})}),stamp());
+          result=response(request,'need_input',!action.team_id?'你想查哪个团队？比如说“Z团队”，我接着查。':'你想查哪个月？说“十月”或“上个月”就可以。');
+        }
         else{
           action.team_id=Number(action.team_id);const team=assertAccess(actor,action.team_id,WRITES.has(action.type));
           db.prepare('INSERT INTO agent_chat_contexts VALUES(?,?,?) ON CONFLICT(context_key) DO UPDATE SET context_json=excluded.context_json,updated_at=excluded.updated_at').run(key,JSON.stringify({team_id:team.id,month:action.month,type:QUERIES.has(action.type)?action.type:'salary'}),stamp());
           result=WRITES.has(action.type)?propose(request,actor,key,team,action):query(request,actor,team,action);
         }
       }
+      if(resolved?.source)result.understanding_source=resolved.source;
       db.prepare('INSERT INTO agent_chat_requests VALUES(?,?,?,?,?)').run(request.request_id,hash(request),accessHash,JSON.stringify(result),stamp());return result;
     }).immediate();
     if(result.status==='running')schedule(()=>executeTask(result.task_id,request));
     return result;
+  }
+  // Understanding only resolves a read scope. Permissions, amounts and every
+  // write still pass through the same synchronous ledger path above.
+  const understanding=new Map();
+  async function respond(input){
+    const request=validateEnvelope(input),actor=actorFor(request),key=contextKey(request,actor);fresh(request);
+    if(db.prepare('SELECT 1 FROM agent_chat_requests WHERE request_id=?').get(request.request_id))return chat(request);
+    const previous=JSON.parse(db.prepare('SELECT context_json FROM agent_chat_contexts WHERE context_key=?').get(key)?.context_json||'{}');
+    const parsed=parse(request,previous);
+    if(request.command||request.group_id||!interpret||!['unknown',...QUERIES].includes(parsed.type)||/不要|不需要|不想|别(?:重算|发布|确认|新增|修改)/.test(request.text))return chat(request);
+    if(parsed.team_id)assertAccess(actor,parsed.team_id);
+    const pending=understanding.get(request.request_id);
+    if(pending){if(pending.hash!==hash(request))throw new HttpError(409,'request_id 已用于其他消息');await pending.work;return chat(request);}
+    const work=(async()=>{
+      let action,source='rules';
+      try{
+        const teams=db.prepare('SELECT id,name FROM teams WHERE status=1').all().filter(t=>canManageTeam(actor,t.id)||actor.member_team_ids.includes(t.id));
+        const plan=await interpret({text:request.text,today:new Date(clock().getTime()+8*3600000).toISOString().slice(0,10),previous,teams});
+        if(plan?.type==='clarify' && ['team','month','intent'].includes(plan.missing) && Object.keys(plan).every(k=>['type','missing'].includes(k))){
+          action=plan.missing==='team'&&QUERIES.has(parsed.type)?{...parsed,team_id:undefined}:{...plan};source='deepseek';
+        }
+        else if(plan && QUERIES.has(plan.type) && Number.isSafeInteger(plan.team_id) && teams.some(t=>t.id===plan.team_id) && (!parsed.team_id||plan.team_id===parsed.team_id) && MONTH.test(plan.month) && Object.keys(plan).every(k=>['type','team_id','month'].includes(k))){
+          action={type:plan.type,team_id:plan.team_id,month:plan.month};source='deepseek';
+        }
+      }catch(error){onError(error);}
+      return chat(request,{action,source});
+    })();
+    understanding.set(request.request_id,{hash:hash(request),work});
+    try{return await work;}finally{understanding.delete(request.request_id);}
   }
   function taskStatus(id,input) {
     const request=validateEnvelope(input,{query:true}),actor=actorFor(request);fresh(request);
@@ -380,7 +423,7 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
     if(!row||row.access_hash!==hash([actor.access_hash,contextKey(request,actor)]))throw new HttpError(403,'回复权限或会话已变化');
     return {allowed:true,response_hash:createHash('sha256').update(row.response_json).digest('hex')};
   }
-  return {chat,taskStatus,bind,pullNotifications,notificationReceipt,authorizeNotification,enqueueNotification,authorizeResponse,
+  return {chat,respond,taskStatus,bind,pullNotifications,notificationReceipt,authorizeNotification,enqueueNotification,authorizeResponse,
     ingressScope:()=>({account_id:accountId,owner_id:ownerId,group_id:'19116819870@chatroom',private_ids:db.prepare(`SELECT b.from_user FROM agent_chat_bindings b JOIN users u ON u.id=b.user_id
       WHERE b.account_id=? AND b.enabled=1 AND u.status=1`).all(accountId).map(r=>r.from_user)}),
     bindings:adminId=>{const admin=db.prepare('SELECT role,status FROM users WHERE id=?').get(Number(adminId));

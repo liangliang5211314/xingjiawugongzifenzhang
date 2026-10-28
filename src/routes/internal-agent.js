@@ -15,8 +15,8 @@ function createInternalAgentRouter({ service, settings, onError = () => {} }) {
     next();
   });
   function failure(req,message) { return {request_id:typeof req.body?.request_id==='string'?req.body.request_id.slice(0,200):'',status:'failed',message:`【性价屋·财务】${message}`,task_id:'',detail_url:''}; }
-  const handle = fn => (req,res,next)=>{try{res.json(fn(req));}catch(error){next(error);}};
-  router.post('/chat',handle(req=>service.chat(req.body)));
+  const handle = fn => async (req,res,next)=>{try{res.json(await fn(req));}catch(error){next(error);}};
+  router.post('/chat',handle(req=>service.respond ? service.respond(req.body) : service.chat(req.body)));
   router.post('/scope',handle(()=>service.ingressScope()));
   router.post('/authorize-response',handle(req=>service.authorizeResponse(req.body)));
   router.post('/tasks/:id/query',handle(req=>service.taskStatus(req.params.id,req.body)));

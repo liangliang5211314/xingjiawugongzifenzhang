@@ -25,6 +25,10 @@
 
 可选 `command` 用于统一入口结构化解析，其类型为 summary / expenses / salary / anomalies / create_record / update_record / recalculate / publish_settlement。常用查询、“那上个月呢”“Z团队呢”、提醒开关和确认/取消也支持直接 text。command 是提案，不能绕过财务身份、字段校验、预览和确认。
 
+普通查询由现有 DeepSeek 理解自然语言，例如“今年十月z组进了多少”“那就换成前一个月”。不要求用户输入 YYYY-MM。模型只接收用户本条原文、北京时间日期、当前人的可访问团队 id/名称，以及本财务会话的团队/月/查询类型，不接收账本、成员工资、业务聊天记录或密钥。理解服务复用统一入口已有模型配置，固定调用 `https://zf.xingjiawu.cn/api/finance-agent/interpret`，使用独立聊天服务凭据；不在财务项目复制模型密钥。
+
+模型仅返回 summary / expenses / salary / anomalies 的团队及月份，或要求补问；财务端再次核对实际权限，再用原服务查询金额。未知团队、额外金额字段和写操作计划不会执行。缺年份沿用财务上下文年份或当前年份；本月按北京时间，前一个月相对会话月份。明确查询未提月份时沿用上下文或本月，回复始终写明实际年月。团队或月份存在多个候选时简短追问。理解服务限时失败后仍可用本地常用说法识别；不会因此自动执行写操作。响应可含 `understanding_source: deepseek / rules`，供后台核验，不发送给微信用户。原 request_id 和原文用于幂等，重复请求复用已保存答案，不重复调用模型。
+
 ```json
 {
   "type": "create_record",

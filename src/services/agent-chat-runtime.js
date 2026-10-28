@@ -13,6 +13,14 @@ function settings() {
     ownerId:process.env.FINANCE_AGENT_OWNER_ID || config.owner_id || 'ZML741213442',baseUrl:config.base_url || process.env.BASE_URL || '',jwtSecret:env.jwtSecret};
 }
 const service = createAgentChatService({db,accountId:settings().accountId,ownerId:settings().ownerId,baseUrl:settings().baseUrl,
+  interpret:async input=>{
+    const config=settings();
+    const response=await fetch('https://zf.xingjiawu.cn/api/finance-agent/interpret',{
+      method:'POST',headers:{'Content-Type':'application/json','X-Finance-Chat-Token':config.token},
+      body:JSON.stringify(input),signal:AbortSignal.timeout(3400),redirect:'error'});
+    if(!response.ok)throw new Error('Finance understanding unavailable');
+    const result=await response.json();if(!result.ok)throw new Error('Finance understanding unavailable');return result.plan;
+  },
   backend:{addRecord:records.addRecord,editRecord:records.editRecord,previewSettlement:settlements.previewSettlement,
     runSettlement:settlements.runSettlement,fetchSettlement:getSettlement},onError:error=>console.error('[finance-chat]',error.name)});
 service.recover();
