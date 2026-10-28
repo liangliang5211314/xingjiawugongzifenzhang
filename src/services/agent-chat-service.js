@@ -196,7 +196,7 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
       .filter(r=> manage || r.person_name===actor.name || r.item_type==='expense' && r.payer_name===actor.name);
     const heading=`${team.name} · ${action.month}${manage?'':` · ${actor.name}（仅本人）`}`;
     if (action.type==='summary') {
-      const total=type=>records.filter(r=>r.item_type===type).reduce((s,r)=>s+Math.abs(r.amount),0);
+      const total=type=>records.filter(r=>r.item_type===type).reduce((s,r)=>s+(type==='expense'?Math.abs(r.amount):r.amount),0);
       return response(request,'answered',`${heading}\n收入 ¥${money(total('income'))}；支出 ¥${money(total('expense'))}。`,{detail_url:link(actor,'record')});
     }
     if (action.type==='expenses') {

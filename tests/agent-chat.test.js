@@ -75,6 +75,12 @@ test('historical snapshots with no expense breakdown never invent a zero reimbur
   const answer=service.chat(request('Z团队2026-10工资',{from_user:'wxid-h'}));assert.match(answer.message,/垫付 未拆分/);assert.doesNotMatch(answer.message,/垫付 ¥0/);
 });
 
+test('income adjustments retain their sign while expenses use their absolute value',()=>{
+  db.prepare("INSERT INTO income_records(team_id,month,person_name,item_type,item_name,amount) VALUES(1,'2026-10','崔如意','income','收入更正',-5729)").run();
+  assert.match(service.chat(request('Z团队2026-10收入')).message,/收入 ¥11460\.34；支出 ¥1608\.00/);
+  assert.match(service.chat(request('Z团队2026-10收入',{from_user:'wxid-r'})).message,/收入 ¥10600\.00/);
+});
+
 test('team leaders reuse the existing team boundary and cannot manage other teams',()=>{
   const own=service.chat(request('Z团队2026-10收入',{from_user:'wxid-leader'}));assert.match(own.message,/11517\.63/);
   assert.throws(()=>service.chat(request('L团队2026-10收入',{from_user:'wxid-leader'})),/无权/);
