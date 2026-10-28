@@ -1,0 +1,98 @@
+<%
+const title = '财务 Agent';
+const page = 'finance-agent';
+const body = `
+<div class="page-header"><h2>财务 Agent</h2><button class="btn" onclick="loadFinance()">刷新状态</button></div>
+<div id="financeErr" class="error-msg" style="display:none"></div>
+<div class="card"><h3>Z 团队微信入口</h3>
+<p>仅接收：Z团队性价屋对接群 · 19116819870@chatroom。月度统计先私发主人 ZML741213442，审核后发布。</p>
+<div class="form-grid"><div class="form-row"><label for="financeTeam">财务团队</label><select id="financeTeam"></select></div>
+<div class="form-row"><label for="financeAccount">托管微信账号 ID</label><input id="financeAccount" placeholder="现有微信桥使用的账号 ID"></div></div>
+<div class="form-row"><label for="financeOwner">主人联系人 ID（对应微信号 ZML741213442，经现有联系人目录核验）</label><input id="financeOwner" placeholder="主人在当前托管微信账号中的稳定联系人 ID"></div>
+<label><input id="financeEnabled" type="checkbox"> 启用本群财务收图</label>
+<button class="btn btn-primary" onclick="saveFinanceScope()">保存入口</button><span id="financeModelStatus" style="margin-left:12px"></span>
+</div>
+<div class="card"><h3>绑定微信成员</h3><p>按微信发送者 ID 绑定真实成员。昵称仅作参考，不能作为身份依据。</p>
+<div class="form-grid"><div class="form-row"><label for="financeSender">微信发送者 ID</label><input id="financeSender"></div>
+<div class="form-row"><label for="financeMember">财务成员</label><select id="financeMember"></select></div></div>
+<button class="btn btn-primary" onclick="bindFinanceMember()">绑定成员</button><div id="financeBindings" style="margin-top:12px"></div></div>
+<div class="card"><h3>上传原图并识别</h3><p>先选择归属成员。识别只生成待核对单，不会自动覆盖已有收入或重复计算月度汇总。</p>
+<div class="form-grid"><div class="form-row"><label for="financeUploadMember">归属成员</label><select id="financeUploadMember"></select></div>
+<div class="form-row"><label for="financeImage">原图（JPEG / PNG / WebP，最多 3MB）</label><input id="financeImage" type="file" accept="image/jpeg,image/png,image/webp"></div></div>
+<button id="financeUploadBtn" class="btn btn-primary" onclick="uploadFinanceImage()">识别并生成核对单</button></div>
+<div class="card"><h3>月度统计 · 先给主人审核</h3><p>生成统计只私发给主人；主人回复审核单号确认后才保存结算并发到群。</p>
+<div class="form-row"><label for="financeReviewMonth">结算月份</label><input type="month" id="financeReviewMonth"></div>
+<label><input type="checkbox" id="financeComplete"> 我已人工核对本月成员全部报齐，待核对凭证均已处理</label>
+<button class="btn btn-primary" onclick="requestFinanceReview()">生成并私发主人审核单</button><div id="financeReviews" style="margin-top:12px"></div></div>
+<div class="card"><h3>待核对与已入账凭证</h3><p>图片月份决定取图中的哪些交易；结算月份决定记入哪期账。两者可以不同。退款、合计不一致、疑似重复均需人工处理。</p><div id="financeSubmissions">加载中…</div></div>
+`;
+const pageScript = `<script>
+let financeState = {}, financeUsers = [];
+const financeStatuses = {processing:'识图中',unbound:'待绑定成员',recognition_failed:'待人工核对 / 可重试',awaiting_confirmation:'待确认入账',posted:'已入账',cancelled:'已取消'};
+function financeEscape(value) { return String(value == null ? '' : value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+async function loadFinance() {
+  const result = await api('/api/finance-agent/status');
+  if (!result || !result.ok) return;
+  financeState = result.data;
+  const teams = await api('/api/teams');
+  document.getElementById('financeTeam').innerHTML = (teams && teams.data || []).map(t => '<option value="'+t.id+'">'+financeEscape(t.name)+'</option>').join('');
+  const scope = financeState.scope;
+  if (scope) { document.getElementById('financeTeam').value=scope.team_id; document.getElementById('financeAccount').value=scope.account_id; document.getElementById('financeOwner').value=scope.owner_id || ''; }
+  document.getElementById('financeEnabled').checked=!!(scope && scope.enabled);
+  document.getElementById('financeModelStatus').textContent=financeState.model_configured ? '已配置现有 DeepSeek 识图入口' : '等待配置服务间连接';
+  const users = await api('/api/users?team_id='+document.getElementById('financeTeam').value);
+  financeUsers = users && users.data || [];
+  const options=financeUsers.map(u=>'<option value="'+u.id+'">'+financeEscape(u.name)+'</option>').join('');
+  document.getElementById('financeMember').innerHTML=options; document.getElementById('financeUploadMember').innerHTML=options;
+  document.getElementById('financeBindings').innerHTML=(financeState.bindings || []).map(b=>'<div>'+financeEscape(b.member_name)+' ← '+financeEscape(b.sender_id)+'</div>').join('') || '尚未绑定；成员发图后可从下面凭证复制发送者 ID。';
+  renderFinanceSubmissions();
+  document.getElementById('financeReviews').innerHTML=(financeState.reviews || []).map(r=>'<div>'+financeEscape(r.month)+' · '+financeEscape({awaiting_owner:'待主人审核',approved:'主人已通过',rejected:'主人已拒绝',stale:'数据有变，需重新审核'}[r.status] || r.status)+' · '+r.id+'</div>').join('');
+}
+async function saveFinanceScope() {
+  const result=await api('/api/finance-agent/scope',{method:'POST',body:JSON.stringify({team_id:Number(document.getElementById('financeTeam').value),account_id:document.getElementById('financeAccount').value.trim(),owner_id:document.getElementById('financeOwner').value.trim(),enabled:document.getElementById('financeEnabled').checked})});
+  if(result && result.ok)loadFinance();
+}
+async function bindFinanceMember() {
+  const sender=document.getElementById('financeSender').value.trim(), user=Number(document.getElementById('financeMember').value);
+  const previous=(financeState.bindings || []).find(b=>b.sender_id===sender);
+  if(previous && previous.user_id!==user && !confirm('该微信已绑定 '+previous.member_name+'，确认改绑？历史凭证不会自动换人。'))return;
+  const result=await api('/api/finance-agent/bindings',{method:'POST',body:JSON.stringify({sender_id:sender,user_id:user,previous_user_id:previous && previous.user_id})});
+  if(result && result.ok)loadFinance();
+}
+async function uploadFinanceImage() {
+  const file=document.getElementById('financeImage').files[0]; if(!file)return alert('请选择原图');
+  const form=new FormData();form.append('image',file);form.append('user_id',document.getElementById('financeUploadMember').value);
+  const button=document.getElementById('financeUploadBtn');button.disabled=true;
+  try {
+    const response=await fetch('/api/finance-agent/upload',{method:'POST',headers:{Authorization:'Bearer '+getToken()},body:form});
+    const result=await response.json();if(!result.ok)throw new Error(result.message || '上传失败');await loadFinance();
+  } catch(error){alert(error.message);} finally{button.disabled=false;}
+}
+function renderFinanceSubmissions() {
+  document.getElementById('financeSubmissions').innerHTML=(financeState.submissions || []).map(s=>{
+    const id=s.id, extraction=s.extraction || {}, months=[...new Set((extraction.transactions || []).map(t=>t.date.slice(0,7)))].sort().reverse();
+    const entries=(extraction.transactions || []).map(t=>'<tr><td>'+financeEscape(t.date)+'</td><td>'+financeEscape({income:'收入',expense:'支出',refund:'退款'}[t.type] || t.type)+'</td><td>¥'+financeEscape(t.amount)+'</td><td>'+financeEscape(t.description)+'</td></tr>').join('');
+    return '<div style="border:1px solid #dde3ec;border-radius:8px;padding:16px;margin:12px 0"><strong>'+financeEscape(s.member_name || '未绑定成员')+' · '+financeEscape(financeStatuses[s.status] || s.status)+' · '+id+'</strong>'+
+      '<p>发送者：'+financeEscape(s.sender_id)+'　'+financeEscape(s.created_at)+'</p><p>'+financeEscape(s.question)+'</p>'+
+      '<button class="btn btn-sm" data-id="'+id+'" onclick="viewFinanceImage(this.dataset.id)">查看原图</button> '+
+      (['unbound','recognition_failed','processing'].includes(s.status)?'<button class="btn btn-sm" data-id="'+id+'" onclick="retryFinance(this.dataset.id)">重新识别</button>':'')+
+      (!['posted','cancelled','processing'].includes(s.status)?' <button class="btn btn-sm" data-id="'+id+'" onclick="cancelFinance(this.dataset.id)">取消凭证</button>':'')+
+      (entries?'<div class="table-wrap"><table class="data-table"><thead><tr><th>到账日期</th><th>类型</th><th>金额</th><th>图片项目</th></tr></thead><tbody>'+entries+'</tbody></table></div>':'')+
+      (s.status==='awaiting_confirmation'?'<div class="form-grid"><div class="form-row"><label>图片月份</label><select id="source-'+id+'">'+months.map(m=>'<option'+(m===s.source_month?' selected':'')+'>'+m+'</option>').join('')+'</select></div><div class="form-row"><label>结算月份</label><input id="month-'+id+'" type="month" value="'+financeEscape(s.month || '')+'"></div><div class="form-row"><label>支出垫付人（收入忽略此项）</label><select id="payer-'+id+'">'+financeUsers.map(u=>'<option value="'+u.id+'"'+(u.id===s.user_id?' selected':'')+'>'+financeEscape(u.name)+'</option>').join('')+'</select></div><div class="form-row"><label>关联已有台账 ID（仅重复记录时填写）</label><input id="existing-'+id+'" type="number" min="1"></div></div><button class="btn btn-primary" data-id="'+id+'" onclick="confirmFinance(this.dataset.id)">确认归属与月份后入账</button>':'')+
+      (s.status==='posted'?'<p>结算月份：'+financeEscape(s.month)+'；台账 ID：'+financeEscape(s.record_ids.join('、'))+'</p>':'')+'</div>';
+  }).join('') || '还没有凭证。可以在上方上传，或在指定微信群发送原图。';
+}
+async function retryFinance(id){ const result=await api('/api/finance-agent/submissions/'+id+'/retry',{method:'POST'});if(result && result.ok)loadFinance(); }
+async function cancelFinance(id){if(!confirm('取消这张待核对凭证？原图与操作记录仍会保留。'))return;const result=await api('/api/finance-agent/submissions/'+id+'/cancel',{method:'POST'});if(result && result.ok)loadFinance();}
+async function requestFinanceReview(){ const month=document.getElementById('financeReviewMonth').value;if(!month)return alert('请选择结算月份');if(!confirm('将本月统计私发给主人 ZML741213442 审核，确认？'))return;const result=await api('/api/finance-agent/reviews',{method:'POST',body:JSON.stringify({month,confirmed_complete:document.getElementById('financeComplete').checked})});if(result && result.ok)loadFinance(); }
+async function confirmFinance(id){
+  const month=document.getElementById('month-'+id).value;if(!month)return alert('请明确选择结算月份');
+  if(!confirm('确认这张凭证的成员、图片月份及结算月份无误？疑似重复记录会阻止新增。'))return;
+  const result=await api('/api/finance-agent/submissions/'+id+'/confirm',{method:'POST',body:JSON.stringify({month,source_month:document.getElementById('source-'+id).value,payer_user_id:Number(document.getElementById('payer-'+id).value),use_existing_id:document.getElementById('existing-'+id).value || undefined})});
+  if(result && result.ok)loadFinance();
+}
+async function viewFinanceImage(id){ const tab=window.open('about:blank','_blank');if(!tab)return alert('请允许打开原图窗口');const response=await fetch('/api/finance-agent/submissions/'+id+'/image',{headers:{Authorization:'Bearer '+getToken()}});if(!response.ok){tab.close();return alert('原图读取失败');}const url=URL.createObjectURL(await response.blob());tab.location.href=url;setTimeout(()=>URL.revokeObjectURL(url),60000); }
+loadFinance();
+</script>`;
+%>
+<%- include('layout', { title, page, body, pageScript }) %>

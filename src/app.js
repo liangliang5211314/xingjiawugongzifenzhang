@@ -25,6 +25,7 @@ const CHANGELOG = [
 const app = express();
 
 app.use(morgan('dev'));
+app.use('/api/finance-agent', express.json({ limit: '5mb' }), require('./routes/finance-agent').router);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -51,6 +52,7 @@ app.get('/admin/records',        adminRender('records'));
 app.get('/admin/settlement',     adminRender('settlement'));
 app.get('/admin/push-logs',      adminRender('push-logs'));
 app.get('/admin/member-reports', adminRender('member-reports'));
+app.get('/admin/finance-agent',  adminRender('finance-agent'));
 
 // 成员H5页面
 app.get('/h5/home',    (req, res) => res.render('member/home'));

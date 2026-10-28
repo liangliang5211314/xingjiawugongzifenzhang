@@ -34,6 +34,10 @@ async function checkAndRun(teamId, month) {
     if (!team) return;
     if (!team.auto_settle_enabled) return;
 
+    // 接入财务 Agent 的团队必须先报齐、给主人审核，不走旧的“有记录即结算”通道。
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='finance_scope'").get() &&
+      db.prepare('SELECT 1 FROM finance_scope WHERE team_id=? AND enabled=1').get(teamId)) return;
+
     const required = getRequiredMembers(teamId, team);
     if (required.length === 0) return;
 

@@ -292,8 +292,15 @@ function calculateSettlement(team, personNames, records, jdAccountMap) {
     const shouldGet = shouldGetMap.get(name) || 0;
     const actual    = actualMap.get(name) || 0;
     const diff      = shouldGet - actual;
+    const rule = ruleMembers.find(m => m.member_name === name);
+    const hasPaidExpense = rule?.rule_mode === 'formula' && rule.formula &&
+      formulaParser.parse(rule.formula).variables().includes('paid_expense');
+    const paidExpense = paidExpenses.get(name) || 0;
     return {
       name,
+      net_share:        hasPaidExpense ? fromCents(shouldGet - paidExpense) : null,
+      paid_expense:     fromCents(paidExpense),
+      reimbursement:    hasPaidExpense ? fromCents(paidExpense) : null,
       should_get:       fromCents(shouldGet),
       actual:           fromCents(actual),
       diff:             fromCents(diff),
