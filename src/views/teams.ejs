@@ -37,10 +37,12 @@ const body = `
         <span style="color:#888;margin-right:6px">公式可用变量（点击复制）：</span>
         <span onclick="copyVar('income')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">income</span><span style="color:#aaa;font-size:11px">总收入</span>
         <span onclick="copyVar('tax')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">tax</span><span style="color:#aaa;font-size:11px">税额</span>
-        <span onclick="copyVar('expense')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">expense</span><span style="color:#aaa;font-size:11px">支出</span>
+        <span onclick="copyVar('expense')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">expense</span><span style="color:#aaa;font-size:11px">团队总支出</span>
+        <span onclick="copyVar('paid_expense')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">paid_expense</span><span style="color:#aaa;font-size:11px">本人垫付</span>
         <span onclick="copyVar('adjust')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">adjust</span><span style="color:#aaa;font-size:11px">调整</span>
         <span onclick="copyVar('distributable')" style="display:inline-block;background:#fff;border:1px solid #c0c8f0;border-radius:4px;padding:1px 7px;margin:2px 3px;cursor:pointer;color:#4a5aef;font-family:monospace">distributable</span><span style="color:#aaa;font-size:11px">可分配收入</span>
         <span id="copyHint" style="color:#4caf50;margin-left:6px;display:none">已复制</span>
+        <div style="color:#666;font-size:12px">费用分摊用 expense，返还本人垫付款加 paid_expense（按记录的垫付人归属，未填写时按姓名归属）。</div>
       </div>
       <div id="ruleMembersWrap"></div>
     </div>

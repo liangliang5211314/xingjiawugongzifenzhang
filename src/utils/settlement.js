@@ -4,7 +4,7 @@ const { getRuleMembers } = require('../models/team-rule-member-model');
 const { HttpError } = require('./http-error');
 
 const formulaParser = new Parser();
-const FORMULA_VARS = ['income', 'tax', 'expense', 'adjust', 'distributable'];
+const FORMULA_VARS = ['income', 'tax', 'expense', 'paid_expense', 'adjust', 'distributable'];
 
 // 用 expr-eval 安全解析成员分成公式（禁止使用 new Function 执行任意代码）
 function evalFormula(formula, vars, memberName) {
@@ -28,23 +28,44 @@ function evalFormula(formula, vars, memberName) {
   if (typeof result !== 'number' || !isFinite(result)) {
     throw new HttpError(400, `成员「${memberName}」的分成公式结果不是有效数值：${formula}`);
   }
-  return Math.round(result);
+  return result;
 }
 
-function calcFromRuleMembers(ruleMembers, personNames, vars) {
-  const result = new Map();
-  const ruleMap = new Map(ruleMembers.map(m => [m.member_name, m]));
-  personNames.forEach(name => {
-    const rm = ruleMap.get(name);
-    if (!rm) { result.set(name, 0); return; }
+function calcFromRuleMembers(ruleMembers, personNames, vars, paidExpenses) {
+  const result = new Map(personNames.map(name => [name, 0]));
+  ruleMembers.forEach(rm => {
+    const name = rm.member_name;
     let share = 0;
     if (rm.rule_mode === 'formula' && rm.formula) {
-      share = evalFormula(rm.formula, vars, name);
+      share = evalFormula(rm.formula, { ...vars, paid_expense: paidExpenses.get(name) || 0 }, name);
     } else if (rm.ratio != null) {
       share = roundShare(vars.distributable, Number(rm.ratio));
     }
     result.set(name, share);
   });
+
+  // 公式原始总额闭合时，用最大余数法分配不足一分的尾数，确保转账能完全结清。
+  // 按配置顺序打破相同余数的平局，不受收入记录的录入顺序影响。
+  const total = [...result.values()].reduce((sum, share) => sum + share, 0);
+  if (Math.abs(total - vars.income) < 0.000001) {
+    const shares = ruleMembers.map((rm, index) => {
+      const raw = result.get(rm.member_name);
+      const whole = Math.floor(raw);
+      return { name: rm.member_name, index, whole, fraction: raw - whole };
+    });
+    let remaining = vars.income - shares.reduce((sum, s) => sum + s.whole, 0);
+    shares.sort((a, b) => {
+      const difference = b.fraction - a.fraction;
+      return Math.abs(difference) < 0.000001 ? a.index - b.index : difference;
+    });
+    shares.forEach(s => {
+      result.set(s.name, s.whole + (remaining > 0 ? 1 : 0));
+      if (remaining > 0) remaining--;
+    });
+  } else {
+    // 不掩盖不闭合的配置，仍交由下方总额校验报错。
+    result.forEach((share, name) => result.set(name, Math.round(share)));
+  }
   return result;
 }
 
@@ -196,7 +217,13 @@ function calculateSettlement(team, personNames, records, jdAccountMap) {
 
   const totalIncomeCents  = sum('income');
   const totalTaxCents     = sum('tax');
-  const totalExpenseCents = Math.abs(sum('expense')); // 支出存为负数或正数均兼容
+  const expenseRecords = records.filter(r => r.item_type === 'expense');
+  const totalExpenseCents = expenseRecords.reduce((s, r) => s + Math.abs(r.amount), 0);
+  const paidExpenses = new Map();
+  expenseRecords.forEach(r => {
+    const payer = r.payer_name || r.person_name;
+    paidExpenses.set(payer, (paidExpenses.get(payer) || 0) + Math.abs(r.amount));
+  });
   const totalAdjustCents  = sum('adjust');
   const distributableCents = totalIncomeCents - totalTaxCents - totalExpenseCents + totalAdjustCents;
 
@@ -222,7 +249,7 @@ function calculateSettlement(team, personNames, records, jdAccountMap) {
       adjust:       totalAdjustCents,
       distributable: distributableCents,
     };
-    shouldGetMap = calcFromRuleMembers(ruleMembers, finalPersonNames, vars);
+    shouldGetMap = calcFromRuleMembers(ruleMembers, finalPersonNames, vars, paidExpenses);
 
     // 校验1：所有成员 should_get 之和必须 ≈ total_income（允许 n 分舍入误差）
     const totalShouldGet = [...shouldGetMap.values()].reduce((s, v) => s + v, 0);
