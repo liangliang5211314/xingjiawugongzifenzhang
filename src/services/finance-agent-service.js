@@ -329,7 +329,12 @@ function createFinanceAgent({ db, recognize, previewSettlement, publishSettlemen
     if (event?.channel === 'finance' && event.account_id === scope.account_id && event.group_id === GROUP_ID &&
       event.from_user && event.message_id && Number.isFinite(event.create_time) && Math.abs(clock().getTime() / 1000 - event.create_time) < 900) {
       if (event.message_type === 3 && typeof event.image_base64 === 'string' && event.image_base64.length < 4.2 * 1024 * 1024) {
-        submit({ account_id:event.account_id, sender_id:event.from_user, message_id:event.message_id, image:Buffer.from(event.image_base64, 'base64') });
+        try { submit({ account_id:event.account_id, sender_id:event.from_user, message_id:event.message_id, image:Buffer.from(event.image_base64, 'base64') }); }
+        catch (error) {
+          if (!(error instanceof HttpError)) throw error;
+          queue({id:`invalid-${event.message_id}`,account_id:event.account_id,sender_id:event.from_user},
+            `本次没有入账：${error.message}。请管理员核对后重新提交。`,'rejected');
+        }
       } else if (event.message_type === 1) receiveText(event);
       else if (event.media_error) {
         const key = `${event.account_id}:${GROUP_ID}:${event.message_id}`;
