@@ -3,6 +3,14 @@ const { env } = require('../config/env');
 const { getTeamsByLeaderUserId } = require('../models/team-model');
 const { HttpError } = require('../utils/http-error');
 
+function applyTeamAccess(user, leaderTeams, scopedLeaderTeamId = 0) {
+  const managedTeamIds = leaderTeams.length <= 1 ? leaderTeams.map(t => t.id) : [leaderTeams[0].id];
+  const useScopedLeaderTeam = scopedLeaderTeamId && managedTeamIds.includes(scopedLeaderTeamId);
+  return { ...user, original_role: user.role, managed_team_ids: useScopedLeaderTeam ? [scopedLeaderTeamId] : managedTeamIds,
+    is_team_leader: managedTeamIds.length > 0, active_leader_team_id: useScopedLeaderTeam ? scopedLeaderTeamId : null,
+    is_scoped_leader_session: !!useScopedLeaderTeam, role: useScopedLeaderTeam && user.role === 'admin' ? 'leader' : user.role };
+}
+
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -13,21 +21,9 @@ function authenticate(req, res, next) {
 
   try {
     req.user = jwt.verify(token, env.jwtSecret);
-    req.user.original_role = req.user.role;
     const leaderTeams = getTeamsByLeaderUserId(req.user.id);
-    const managedTeamIds = leaderTeams.length <= 1
-      ? leaderTeams.map(t => t.id)
-      : [leaderTeams[0].id];
     const scopedLeaderTeamId = Number(req.headers['x-leader-team-id'] || 0);
-    const useScopedLeaderTeam = scopedLeaderTeamId && managedTeamIds.includes(scopedLeaderTeamId);
-    req.user.managed_team_ids = managedTeamIds;
-    req.user.is_team_leader = managedTeamIds.length > 0;
-    req.user.active_leader_team_id = useScopedLeaderTeam ? scopedLeaderTeamId : null;
-    req.user.is_scoped_leader_session = !!useScopedLeaderTeam;
-    if (useScopedLeaderTeam) {
-      req.user.managed_team_ids = [scopedLeaderTeamId];
-      if (req.user.role === 'admin') req.user.role = 'leader';
-    }
+    req.user = applyTeamAccess(req.user, leaderTeams, scopedLeaderTeamId);
     return next();
   } catch {
     return next(new HttpError(401, 'Token 无效或已过期'));
@@ -59,4 +55,4 @@ function assertCanManageTeam(user, teamId) {
   throw new HttpError(403, '只能操作自己负责的团队');
 }
 
-module.exports = { authenticate, authorize, authorizeAdminOrLeader, canManageTeam, assertCanManageTeam };
+module.exports = { authenticate, authorize, authorizeAdminOrLeader, canManageTeam, assertCanManageTeam, applyTeamAccess };

@@ -22,7 +22,7 @@ function fetchYearCompare(teamId, month) {
   return { last, prev2, prev3 };
 }
 
-function runSettlement(teamId, month) {
+function buildSettlementData(teamId, month) {
   const team = getTeamById(teamId);
   if (!team) throw new HttpError(404, '团队不存在');
 
@@ -60,14 +60,23 @@ function runSettlement(teamId, month) {
   };
   result.member_compare = memberCompare;
 
-  return saveSettlement(teamId, month, {
+  return {
     total_income:        totalIncomeCents,
     total_expense:       totalExpenseCents,
     year_compare_last:   last  ?? null,
     year_compare_prev2:  prev2 ?? null,
     year_compare_prev3:  prev3 ?? null,
     result,
-  });
+  };
+}
+
+function previewSettlement(teamId, month) {
+  const { result, ...totals } = buildSettlementData(teamId, month);
+  return { team_id: teamId, month, ...totals, result_json: result };
+}
+
+function runSettlement(teamId, month) {
+  return saveSettlement(teamId, month, buildSettlementData(teamId, month));
 }
 
 function fetchSettlement(teamId, month) {
@@ -90,4 +99,4 @@ function markSettlementPushed(id) {
   return markPushed(id);
 }
 
-module.exports = { runSettlement, fetchSettlement, fetchSettlementById, getSettlements, markSettlementPushed };
+module.exports = { runSettlement, previewSettlement, fetchSettlement, fetchSettlementById, getSettlements, markSettlementPushed };

@@ -4,7 +4,11 @@ const page = 'finance-agent';
 const body = `
 <div class="page-header"><h2>财务 Agent</h2><button class="btn" onclick="loadFinance()">刷新状态</button></div>
 <div id="financeErr" class="error-msg" style="display:none"></div>
-<div class="card"><h3>Z 团队微信入口</h3>
+<div class="card"><h3>统一微信入口 · 财务身份</h3><p>助理2由转发项目统一接收、分流和发送。本项目只处理财务；绑定真实账号后按账号现有团队权限访问。普通成员不会获得管理员权限。</p>
+<p id="chatAccountStatus"></p><div class="form-grid"><div class="form-row"><label for="chatSender">真实微信发送者 ID</label><input id="chatSender"></div><div class="form-row"><label for="chatUser">本项目真实账号</label><select id="chatUser"></select></div></div>
+<label><input type="checkbox" id="chatBindingEnabled" checked> 启用身份绑定</label>　<label><input type="checkbox" id="chatNotifications"> 开启本人私聊财务提醒</label>
+<button class="btn btn-primary" onclick="saveChatBinding()">保存统一入口身份</button><div id="chatBindings"></div></div>
+<div class="card"><h3>旧版 Z 团队收图入口（切换前保留）</h3><p>下面为原有独立收图流程。统一分流切换前须由微信入口项目关闭重复分派；本页面不会创建新的微信连接。</p>
 <p>仅接收：Z团队性价屋对接群 · 19116819870@chatroom。月度统计先私发主人 ZML741213442，审核后发布。</p>
 <div class="form-grid"><div class="form-row"><label for="financeTeam">财务团队</label><select id="financeTeam"></select></div>
 <div class="form-row"><label for="financeAccount">托管微信账号 ID</label><input id="financeAccount" placeholder="现有微信桥使用的账号 ID"></div></div>
@@ -28,9 +32,11 @@ const body = `
 `;
 const pageScript = `<script>
 let financeState = {}, financeUsers = [];
+let chatBindingState = {};
 const financeStatuses = {processing:'识图中',unbound:'待绑定成员',recognition_failed:'待人工核对 / 可重试',awaiting_confirmation:'待确认入账',posted:'已入账',cancelled:'已取消'};
 function financeEscape(value) { return String(value == null ? '' : value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 async function loadFinance() {
+  await loadChatBindings();
   const result = await api('/api/finance-agent/status');
   if (!result || !result.ok) return;
   financeState = result.data;
@@ -47,6 +53,20 @@ async function loadFinance() {
   document.getElementById('financeBindings').innerHTML=(financeState.bindings || []).map(b=>'<div>'+financeEscape(b.member_name)+' ← '+financeEscape(b.sender_id)+'</div>').join('') || '尚未绑定；成员发图后可从下面凭证复制发送者 ID。';
   renderFinanceSubmissions();
   document.getElementById('financeReviews').innerHTML=(financeState.reviews || []).map(r=>'<div>'+financeEscape(r.month)+' · '+financeEscape({awaiting_owner:'待主人审核',approved:'主人已通过',rejected:'主人已拒绝',stale:'数据有变，需重新审核'}[r.status] || r.status)+' · '+r.id+'</div>').join('');
+}
+async function loadChatBindings(){
+  const result=await api('/api/finance-agent/chat-bindings');if(!result || !result.ok)return;
+  chatBindingState=result.data;
+  document.getElementById('chatAccountStatus').textContent=chatBindingState.account_id?'托管账号：'+chatBindingState.account_id:'新适配接口尚未配置托管账号，当前未启用。';
+  document.getElementById('chatUser').innerHTML=(chatBindingState.users || []).map(u=>'<option value="'+u.id+'">'+financeEscape(u.name)+'（'+financeEscape(u.role)+'）</option>').join('');
+  document.getElementById('chatBindings').innerHTML=(chatBindingState.bindings || []).map(b=>'<div>'+financeEscape(b.from_user)+' → '+financeEscape(b.name)+' · '+(b.enabled?'启用':'停用')+' · 提醒'+(b.notifications_enabled?'开启':'关闭')+'</div>').join('') || '新接口尚无身份绑定；旧群昵称绑定不会自动继承。';
+}
+async function saveChatBinding(){
+  if(!chatBindingState.account_id)return alert('请先由服务管理员配置助理2账号及专用服务凭据');
+  const sender=document.getElementById('chatSender').value.trim(),user=Number(document.getElementById('chatUser').value),old=(chatBindingState.bindings || []).find(b=>b.from_user===sender);
+  if(old && old.user_id!==user && !confirm('确认改绑？旧会话和待确认事项不会被新账号继承。'))return;
+  const result=await api('/api/finance-agent/chat-bindings',{method:'POST',body:JSON.stringify({account_id:chatBindingState.account_id,from_user:sender,user_id:user,previous_user_id:old && old.user_id,enabled:document.getElementById('chatBindingEnabled').checked,notifications_enabled:document.getElementById('chatNotifications').checked})});
+  if(result && result.ok)loadChatBindings();
 }
 async function saveFinanceScope() {
   const result=await api('/api/finance-agent/scope',{method:'POST',body:JSON.stringify({team_id:Number(document.getElementById('financeTeam').value),account_id:document.getElementById('financeAccount').value.trim(),owner_id:document.getElementById('financeOwner').value.trim(),enabled:document.getElementById('financeEnabled').checked})});

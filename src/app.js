@@ -25,6 +25,8 @@ const CHANGELOG = [
 const app = express();
 
 app.use(morgan('dev'));
+const financeChatRuntime = require('./services/agent-chat-runtime');
+app.use('/api/internal/agent', require('./routes/internal-agent').createInternalAgentRouter(financeChatRuntime));
 app.use('/api/finance-agent', express.json({ limit: '5mb' }), require('./routes/finance-agent').router);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
