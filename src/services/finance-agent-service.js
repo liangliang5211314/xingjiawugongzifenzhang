@@ -280,7 +280,7 @@ function createFinanceAgent({ db, recognize, previewSettlement, publishSettlemen
     const row = idMatch ? pending.find(r => r.id === idMatch[0]) : pending.length === 1 ? pending[0] : null;
     let reply = '';
     if (!row) reply = pending.length > 1 ? `有多张待核对凭证，请带上单号：${pending.slice(0, 5).map(r => r.id).join('、')}` : '当前没有待确认凭证，可在本群发送收入或支出原图。';
-    else if (/取消/.test(text)) {
+    else if (/^取消(?:\s|[a-f0-9]|$)/.test(text)) {
       db.prepare("UPDATE finance_submissions SET status='cancelled',audit_json=?,updated_at=? WHERE id=?").run(audit(row, 'cancelled', event.from_user), stamp(), row.id);
       reply = `已取消凭证 ${row.id}，没有入账。`;
     } else {
@@ -289,7 +289,7 @@ function createFinanceAgent({ db, recognize, previewSettlement, publishSettlemen
       let month = fullMonth ? `${fullMonth[1]}-${fullMonth[2].padStart(2, '0')}` : simpleMonth && row.source_month ? `${row.source_month.slice(0, 4)}-${simpleMonth[1].padStart(2, '0')}` : row.month;
       if (/本月/.test(text)) month = new Date(clock().getTime() + 8 * 3600000).toISOString().slice(0, 7);
       if (!month) reply = `凭证 ${row.id}：请明确结算月份，例如“确认 ${row.id} 2026-10”。图片到账月份与佣金结算月份可能不同。`;
-      else if (!/确认|^对|^是|^好|没问题/.test(text)) {
+      else if (!/^(?:确认|对的?|是的?|好的?|没问题)(?:\s+[a-f0-9]{12})?(?:\s+20\d{2}[-年]\d{1,2}月?)?[。！!\s]*$/.test(text)) {
         db.prepare('UPDATE finance_submissions SET month=?,updated_at=? WHERE id=?').run(month, stamp(), row.id);
         reply = `凭证 ${row.id} 将记入 ${month}。请回复“确认 ${row.id}”后入账。`;
       } else {
@@ -397,7 +397,7 @@ function createFinanceAgent({ db, recognize, previewSettlement, publishSettlemen
   function ownerReply(event) {
     const key = `${event.account_id}:owner:${event.message_id}`;
     if (db.prepare('SELECT 1 FROM finance_message_events WHERE event_key=?').get(key)) return;
-    const match = clean(event.content, 500).match(/(确认发布|同意发布|拒绝)\s*([a-f0-9]{12})/);
+    const match = clean(event.content, 500).match(/^(确认发布|同意发布|拒绝)\s+([a-f0-9]{12})[。！!\s]*$/);
     if (!match) return;
     db.transaction(() => {
       const scope = getScope(), review = db.prepare('SELECT * FROM finance_reviews WHERE id=?').get(match[2]);

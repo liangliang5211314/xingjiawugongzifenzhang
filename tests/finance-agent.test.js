@@ -142,3 +142,14 @@ test('expired bridge messages are acknowledged without posting and pending recei
   assert.equal(result.ack,'fixture-bot:old');
   assert.equal(f.db.prepare('SELECT count(*) n FROM income_records').get().n,0);
 });
+
+test('negative or quoted confirmation text never authorizes posting or publishing',async t=>{
+  const f=fixture(t),row=f.submit('negative');await f.agent.process(row.id);
+  f.exchange({channel:'finance',account_id:'fixture-bot',group_id:GROUP_ID,from_user:'wxid-r',message_id:'no-post',message_type:1,is_group:true,create_time:Date.parse('2026-10-28T04:00:00Z')/1000,content:'不要确认 '+row.id+' 2026-10'});
+  assert.equal(f.agent.get(row.id).status,'awaiting_confirmation');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM income_records').get().n,0);
+  f.agent.cancel(row.id,1);
+  const review=f.agent.requestReview('2026-10',{admin:1,confirmed_complete:true});
+  f.exchange({channel:'finance',account_id:'fixture-bot',group_id:'',is_group:false,from_user:'wxid-owner',message_id:'no-publish',message_type:1,create_time:Date.parse('2026-10-28T04:00:00Z')/1000,content:'不要确认发布 '+review.id});
+  assert.equal(f.publications,0);assert.equal(f.agent.reviews()[0].status,'awaiting_owner');
+});
