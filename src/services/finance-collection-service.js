@@ -74,7 +74,7 @@ function createFinanceCollection({db,accountId,ownerId,clock=()=>new Date(),sche
     if(/^(?:还差谁|收齐了吗|收了多少|收集进度)[？?。!！\s]*$/.test(text))return annotate({status:'answered',message:progress(session)},session);
     const q=JSON.parse(m.question_json),manual=text.match(/^(?:我)?(?:本月|这个月)?(?:的)?(?:总)?收入(?:是|为|共|一共)?\s*[¥￥]?\s*(\d{1,8}(?:\.\d{1,2})?)\s*元?[。!！\s]*$/),zero=/^(?:我)?(?:(?:本月|这个月)(?:没有|无|没|零|0)(?:收入)?|(?:没有|无|没)收入|0元)[。!！\s]*$/.test(text);
     if(manual||zero){const total=zero?0:Math.round(Number(manual[1])*100);db.prepare("UPDATE agent_collection_members SET manual_total=?,done=?,question_json='{}' WHERE session_id=? AND user_id=?").run(total,zero?1:0,session.id,m.user_id);
-      const reviewId=zero&&complete(session);return annotate({status:'answered',message:`${m.name}，本月收入按你说明的 ¥${money(total)} 暂存核对。${zero?(reviewId?'已全部报齐，先发给主人核对。':progress(session)):'发齐后回复“报齐”，再交给主人确认。'}`},session);}
+      const reviewId=zero&&complete(session);return annotate({status:'answered',message:`${m.name}，已按你说明的本月收入暂存核对。${zero?(reviewId?'已全部报齐，先发给主人核对。':progress(session)):'发齐后回复“报齐”，再交给主人确认。'}`},session);}
     if(q.type==='source_month'){const yes=/^(?:是的?|对的?|确认|好的?|没问题)[。!！\s]*$/.test(text),chosen=monthFrom(text,clock())||(yes&&q.months.length===1?q.months[0]:null);
       if(chosen&&q.months.includes(chosen)){db.prepare("UPDATE agent_collection_images SET source_month=?,status='recognized',updated_at=? WHERE id=?").run(chosen,stamp(),q.image_id);
         const next=db.prepare("SELECT id,extraction_json FROM agent_collection_images WHERE session_id=? AND user_id=? AND status='needs_input' ORDER BY created_at,id LIMIT 1").get(session.id,m.user_id);
@@ -90,7 +90,7 @@ function createFinanceCollection({db,accountId,ownerId,clock=()=>new Date(),sche
       if(m.manual_total===null&&db.prepare("SELECT 1 FROM agent_collection_images WHERE session_id=? AND user_id=? AND status IN ('failed','needs_input') LIMIT 1").get(session.id,m.user_id))return annotate({status:'need_input',message:`${m.name}，还有截图需要补充说明。请确认截图月份，或直接说明“本月总收入是…元”后再报齐。`},session);
       let value;try{value=totals(session,m);}catch(e){return annotate({status:'need_input',message:`${m.name}，${e.message}`},session);}
       db.prepare('UPDATE agent_collection_members SET done=1 WHERE session_id=? AND user_id=?').run(session.id,m.user_id);const reviewId=complete(session);
-      return annotate({status:'answered',message:`${m.name}，${session.month} 收入 ¥${money(value.amount)} 已报齐${value.overlap?'（重叠明细已去重，请留意核对）':''}。${reviewId?'成员已全部报齐，结算预览先私发给主人；确认前不改账、不发群。':progress(session)}`},session);
+      return annotate({status:'answered',message:`${m.name}，${session.month} 收入截图已报齐${value.overlap?'（重叠明细已去重，请留意核对）':''}。${reviewId?'成员已全部报齐，结算预览先私发给主人；确认前不改账、不发群。':progress(session)}`},session);
     }
     return null;
   }
@@ -103,7 +103,7 @@ function createFinanceCollection({db,accountId,ownerId,clock=()=>new Date(),sche
       if(!source){db.prepare('UPDATE agent_collection_members SET question_json=? WHERE session_id=? AND user_id=?').run(JSON.stringify({type:'source_month',image_id:imageId,months}),session.id,m.user_id);
         notice(session,m,`这张截图显示 ${months.join('、')} 到账，本次收集 ${session.month} 工资。请说明用截图哪个月的数据，例如“用${Number(months[0].slice(5))}月数据”。`,imageId);}
       else{db.prepare("UPDATE agent_collection_images SET status='superseded' WHERE session_id=? AND user_id=? AND status='failed'").run(session.id,m.user_id);let value;try{value=totals(session,rows(session.id).find(x=>x.user_id===m.user_id));}catch(e){notice(session,m,e.message,imageId);return;}
-        notice(session,m,`截图已识别，本次 ${session.month} 收入暂计 ¥${money(value.amount)}。${value.overlap?'截图有重叠明细，已先去重；如是不同的收入，请说明本月总额。':''}多张截图可继续发，全部发齐后回复“报齐”；结算先给主人确认。`,imageId);}
+        notice(session,m,`截图已识别，已暂存用于 ${session.month} 工资核对。${value.overlap?'截图有重叠明细，已先去重；如是不同的收入，请说明本月总额。':''}多张截图可继续发，全部发齐后回复“报齐”；金额明细先给主人确认。`,imageId);}
     }catch(error){db.prepare("UPDATE agent_collection_images SET status='failed',error=?,updated_at=? WHERE id=? AND status='processing'").run(error instanceof HttpError?error.message:'识别暂未完成',stamp(),imageId);
       try{const session=get(image.session_id),m=rows(session.id).find(m=>m.user_id===image.user_id);if(session.status==='collecting')notice(session,m,'这张图片还没看清，请发清晰原图；也可以说明“本月总收入是…元”，我会把人工补充情况一并交给主人核对。',imageId);}catch{}
       onError(error);

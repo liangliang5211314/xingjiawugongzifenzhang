@@ -52,7 +52,7 @@ test('missing or ambiguous member identity never turns a nickname into an author
 test('screenshots are asynchronously recognized once and tied to the real sender without writing the ledger',async()=>{
   start();const before=snapshot(),job=image('wxid-r');assert.equal(job.status,'running');const same=image('wxid-r');assert.equal(same.task_id,job.task_id);await flush();assert.equal(calls,1);assert.equal(snapshot(),before);
   const row=db.prepare('SELECT * FROM agent_collection_images WHERE id=?').get(job.task_id);assert.equal(row.source_month,'2026-10');assert.equal(row.status,'recognized');
-  const notices=service.pullNotifications({account_id:BOT}).items;assert.ok(notices.some(n=>n.message.includes('10657.29')&&n.at_wxids.includes('wxid-r')));
+  const notices=service.pullNotifications({account_id:BOT}).items;assert.ok(notices.some(n=>n.message.includes('截图已识别')&&n.at_wxids.includes('wxid-r')));assert.ok(notices.every(n=>!n.message.includes('10657.29')));
   assert.throws(()=>image('wxid-other'),/无权/);assert.equal(calls,1);
   assert.equal(service.taskStatus(job.task_id,req('wxid-r','')).status,'answered');assert.throws(()=>service.taskStatus(job.task_id,req('wxid-h','')),/本人/);
 });
@@ -75,15 +75,15 @@ test('a stale ledger or a different user cannot approve a collection preview',as
 test('different receipt months prompt the exact member, and ordinary chat does not complete the task',async()=>{
   start();const september={transactions:[{date:'2026-09-01',amount:'10.00',type:'income',description:'九月到账'}],monthly_totals:[{month:'2026-09',amount:'10.00'}]};image('wxid-r','september',september);await flush();
   assert.equal(db.prepare('SELECT status FROM agent_collection_images').get().status,'needs_input');assert.equal(say('wxid-r','报齐').status,'need_input');
-  say('wxid-r','@助理2 用九月数据');assert.equal(db.prepare('SELECT source_month FROM agent_collection_images').get().source_month,'2026-09');assert.match(say('wxid-r','我发齐了').message,/10\.00/);
+  say('wxid-r','@助理2 用九月数据');assert.equal(db.prepare('SELECT source_month FROM agent_collection_images').get().source_month,'2026-09');say('wxid-r','我发齐了');finishManual();assert.equal(JSON.parse(db.prepare('SELECT preview_json FROM agent_collection_sessions').get().preview_json).total_income,101000);
 });
 test('multiple complete platforms sum correctly while overlapping screenshots are not counted twice',async()=>{
   start();image('wxid-r','JD');image('wxid-r','JD-crop');image('wxid-r','TB',{transactions:[{date:'2026-10-22',amount:'1000.00',type:'income',description:'淘宝收益'}],monthly_totals:[{month:'2026-10',amount:'1000.00'}]});await flush();
-  assert.match(say('wxid-r','报齐').message,/11657\.29/);assert.equal(calls,3);
+  say('wxid-r','报齐');finishManual();assert.equal(JSON.parse(db.prepare('SELECT preview_json FROM agent_collection_sessions').get().preview_json).total_income,1265729);assert.equal(calls,3);
 });
 test('incomplete, unreadable or refund images are held for clarification and manual totals remain explicit',async()=>{
   start();image('wxid-r','partial',{transactions:[{date:'2026-10-20',amount:'20.00',type:'income',description:'明细'}],monthly_totals:[{month:'2026-10',amount:'100.00'}]});await flush();assert.equal(say('wxid-r','报齐').status,'need_input');
-  say('wxid-r','我本月总收入是100元');assert.match(say('wxid-r','报齐').message,/100\.00/);
+  say('wxid-r','我本月总收入是100元');assert.match(say('wxid-r','报齐').message,/已报齐/);
   image('wxid-h','failed',new Error('PRIVATE_MODEL_KEY_OR_TRACE'));await flush();assert.equal(say('wxid-h','报齐').status,'need_input');
   const texts=db.prepare('SELECT message FROM agent_chat_notifications').all().map(n=>n.message).join('');assert.doesNotMatch(texts,/PRIVATE_MODEL|页面上传/);
 });
