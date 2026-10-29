@@ -39,7 +39,7 @@ function validateEnvelope(input, { query = false } = {}) {
 }
 
 function createAgentChatService({ db, backend, accountId, ownerId = 'ZML741213442', baseUrl = '',
-  clock = () => new Date(), schedule = fn => setImmediate(fn), onError = () => {}, interpret }) {
+  clock = () => new Date(), schedule = fn => setImmediate(fn), onError = () => {}, interpret,getCollection=()=>null }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS agent_chat_bindings (
       account_id TEXT NOT NULL,from_user TEXT NOT NULL,user_id INTEGER NOT NULL REFERENCES users(id),
@@ -154,6 +154,40 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
       if(input.enabled)db.prepare('UPDATE agent_chat_bindings SET notifications_enabled=1 WHERE account_id=? AND from_user=?').run(accountId,ownerId);
       else db.prepare("UPDATE agent_chat_notifications SET state='suppressed',updated_at=? WHERE kind IN ('group_review','group_settlement') AND state='queued'").run(stamp());
     }).immediate();return groupPushStatus();
+  }
+  function collectionAccess(request,manage=false){
+    const actor=actorFor(request),p=groupPolicy();if(!p)throw new HttpError(409,'请先开启 Z团队助理2群推送');assertAccess(actor,p.team_id,manage);
+    if(manage&&request.from_user!==ownerId)throw new HttpError(403,'请主人发起工资收集');return actor;
+  }
+  function collectionMembers(){
+    const p=groupPolicy();if(!p)throw new HttpError(409,'群推送尚未开启');const team=db.prepare('SELECT report_member_names FROM teams WHERE id=?').get(p.team_id);
+    const configured=JSON.parse(team.report_member_names||'[]'),names=configured.length?configured:db.prepare('SELECT member_name FROM team_rule_members WHERE team_id=? ORDER BY id').all(p.team_id).map(m=>m.member_name);
+    return names.map(name=>{
+      const users=db.prepare(`SELECT id,name,status FROM users u WHERE u.name=? AND u.status=1 AND (u.team_id=? OR EXISTS(SELECT 1 FROM user_teams ut WHERE ut.user_id=u.id AND ut.team_id=?))`).all(name,p.team_id,p.team_id);
+      if(users.length!==1)throw new HttpError(409,`${name} 的财务账号不唯一，请主人核对`);
+      const bindings=db.prepare('SELECT from_user,revision FROM agent_chat_bindings WHERE account_id=? AND user_id=? AND enabled=1').all(accountId,users[0].id);
+      if(bindings.length!==1)throw new HttpError(409,`${name} 的微信身份尚未唯一绑定，请主人先核对后再开始收集`);
+      return {user_id:users[0].id,name,sender_id:bindings[0].from_user,binding_revision:bindings[0].revision};
+    });
+  }
+  function requestCollectionReview(session,saved,changes,draftHash){
+    const actor=collectionAccess({account_id:accountId,from_user:ownerId},true),p=groupPolicy(session.team_id),cid=uid(),snapshot=sourceHash(session.team_id,session.month);
+    if(!actor.binding.notifications_enabled)throw new HttpError(409,'主人已关闭财务提醒，请先在私聊开启提醒，再回复报齐');
+    for(const old of db.prepare("SELECT id,action_json FROM agent_chat_confirmations WHERE status='pending'").all())if(JSON.parse(old.action_json).collection_id===session.id)db.prepare("UPDATE agent_chat_confirmations SET status='cancelled' WHERE id=?").run(old.id);
+    const request={account_id:accountId,from_user:ownerId,conversation_id:'wechat:'+hash([accountId,'',ownerId]).slice(0,40),group_id:''};
+    const action={type:'collection_finalize',team_id:session.team_id,month:session.month,target:'z_group',group_revision:p.revision,collection_id:session.id,draft_hash:draftHash,review_source_hash:snapshot};
+    db.prepare('INSERT INTO agent_chat_confirmations VALUES(?,?,?,?,?,?,?,?,?)').run(cid,contextKey(request,actor),actor.id,actor.access_hash,JSON.stringify(action),snapshot,'pending',new Date(clock().getTime()+900000).toISOString(),stamp());
+    const intro='本期截图已收齐。当前只是预览，尚未修改台账。\n'+changes.map(c=>`${c.name}：原收入 ¥${money(c.previous)} → 本次 ¥${money(c.total)}${c.manual?'（本人补充总额）':'（截图明细）'}`).join('\n');
+    const report=intro+'\n━━━━━━━━━━━━━━━━━━━━\n'+settlementMessage({name:p.team_name},saved),parts=messageParts(report);
+    const footer=`\n确认后保留原记录、按差额补记收入，保存本月结算，并由助理2发到“${Z_GROUP_NAME}”。\n确认请回复“确认发布 ${cid}”；取消请回复“取消 ${cid}”。`;
+    parts.forEach((part,i)=>enqueueNotification({source_key:`group-review:${p.revision}:${snapshot}:${cid}:${i}`,from_user:ownerId,team_id:session.team_id,month:session.month,kind:'group_review',message:`工资收集核对（${i+1}/${parts.length}）\n${part}${footer}`}));return cid;
+  }
+  function queueGroupPublication(actor,action,saved,confirmation){
+    const p=groupPolicy(action.team_id);if(!p||p.revision!==action.group_revision||!actor.binding.notifications_enabled)throw new HttpError(409,'群推送或提醒设置已变化，这次没有发到群');
+    const snapshot=sourceHash(action.team_id,action.month),prior=db.prepare("SELECT source_key FROM agent_chat_notifications WHERE kind='group_settlement' AND team_id=? AND month=?").all(action.team_id,action.month).some(n=>n.source_key.split(':')[2]===snapshot);
+    if(prior)return '这份结算已提交群推送，未重复发送。';
+    const parts=messageParts(settlementMessage({name:p.team_name},saved));parts.forEach((part,i)=>{if(!enqueueNotification({source_key:`group-settlement:${p.revision}:${snapshot}:${confirmation.id}:${i}`,from_user:ownerId,team_id:action.team_id,month:action.month,kind:'group_settlement',message:`已核对的结算（${i+1}/${parts.length}）\n${part}`}))throw new HttpError(409,'群推送设置已变化，这次没有发送');});
+    return `已交给助理2发送到“${Z_GROUP_NAME}”，共 ${parts.length} 条；发送结果仍待确认。`;
   }
   function parse(request, previous) {
     if (request.command) return { ...request.command };
@@ -296,7 +330,7 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
     }).immediate();
   }
   function enqueueNotification({source_key,from_user,team_id,month,kind,message}) {
-    if (!source_key || !['anomaly','owner_review','settlement','group_review','group_settlement'].includes(kind) || !MONTH.test(month) || !safeText(message,1600)) throw new HttpError(400,'提醒字段无效');
+    if (!source_key || !['anomaly','owner_review','settlement','group_review','group_settlement','collection_notice'].includes(kind) || !MONTH.test(month) || !safeText(message,1600)) throw new HttpError(400,'提醒字段无效');
     let actor;
     try {actor=actorFor({account_id:accountId,from_user});assertAccess(actor,team_id,kind!=='settlement');}catch(error){if(error instanceof HttpError)return null;throw error;}
     if (!actor.binding.notifications_enabled || kind==='owner_review' && from_user!==ownerId) return null;
@@ -316,7 +350,12 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
         assertAccess(actor,action.team_id,true);
         if(actor.access_hash!==task.access_hash||confirmation.source_hash!==sourceHash(action.team_id,action.month))throw new HttpError(409,'权限或原数据已变化，请重新预览');
         let message,detail;
-        if(action.type==='recalculate'){
+        if(action.type==='collection_finalize'){
+          if(request.from_user!==ownerId||!actor.binding.notifications_enabled)throw new HttpError(403,'请主人本人确认，且保持财务提醒开启');
+          const saved=getCollection().finalize(action.collection_id,action.draft_hash);
+          db.prepare('UPDATE agent_chat_confirmations SET source_hash=? WHERE id=?').run(sourceHash(action.team_id,action.month),confirmation.id);
+          message='工资已按核对结果保存。'+queueGroupPublication(actor,action,saved,confirmation);detail=link(actor,'settlement');
+        }else if(action.type==='recalculate'){
           const saved=backend.runSettlement(action.team_id,action.month);detail=link(actor,'settlement');
           if(groupPolicy(action.team_id)){
             const review=requestGroupReview(saved);message=`结算已保存（编号 ${saved.id}）。${review.message}。尚未发到群。`;
@@ -332,16 +371,7 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
           if(request.from_user!==ownerId)throw new HttpError(403,'只有主人可确认发布');
           const saved=backend.fetchSettlement(action.team_id,action.month);if(!saved)throw new HttpError(409,'结算已不存在');
           if(action.target==='z_group'){
-            const policy=groupPolicy(action.team_id);
-            if(!policy||policy.revision!==action.group_revision)throw new HttpError(409,'群推送设置已变化，请重新核对');
-            if(!actor.binding.notifications_enabled)throw new HttpError(409,'财务提醒已关闭，这次没有发到群');
-            const snapshot=sourceHash(action.team_id,action.month);
-            const prior=db.prepare("SELECT source_key FROM agent_chat_notifications WHERE kind='group_settlement' AND team_id=? AND month=?").all(action.team_id,action.month).some(n=>n.source_key.split(':')[2]===snapshot);
-            if(prior)message='这份结算已提交群推送，未重复发送。';
-            else{const parts=messageParts(settlementMessage({name:policy.team_name},saved));
-              parts.forEach((part,i)=>{if(!enqueueNotification({source_key:`group-settlement:${policy.revision}:${snapshot}:${confirmation.id}:${i}`,from_user:ownerId,team_id:action.team_id,month:action.month,kind:'group_settlement',message:`已核对的结算（${i+1}/${parts.length}）\n${part}`}))throw new HttpError(409,'群推送设置已变化，这次没有发送');});
-              message=`已交给助理2发送到“${Z_GROUP_NAME}”，共 ${parts.length} 条；发送结果仍待确认。`;
-            }
+            message=queueGroupPublication(actor,action,saved,confirmation);
             detail=link(actor,'settlement');
           }else{
           let count=0;
@@ -366,13 +396,15 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
     const chosen=choice.id?rows.find(r=>r.id===choice.id):rows.length===1?rows[0]:null;
     if(!chosen)return response(request,'need_input',rows.length>1?`有多个待确认事项：${rows.map(r=>r.id).join('、')}。请明确“确认 单号”或“取消 单号”。`:'当前会话没有对应有效待确认事项；未执行操作。');
     if(choice.type==='cancel'){
+      const action=JSON.parse(chosen.action_json);if(action.collection_id)getCollection()?.cancel(action.collection_id);
       db.prepare("UPDATE agent_chat_confirmations SET status='cancelled' WHERE id=? AND status='pending'").run(chosen.id);
       return response(request,'answered',`已取消 ${chosen.id}，未修改台账或结算。`);
     }
     const action=JSON.parse(chosen.action_json);assertAccess(actor,action.team_id,true);
     if(action.target==='z_group'&&groupPolicy(action.team_id)?.revision!==action.group_revision){db.prepare("UPDATE agent_chat_confirmations SET status='stale' WHERE id=?").run(chosen.id);return response(request,'need_input','群推送设置已变化，请重新核对；这次没有发送。');}
-    if(action.type==='publish_settlement'&&!choice.publish)return response(request,'needs_confirmation',`发布须明确回复“确认发布 ${chosen.id}”；本次没有发布。`,{confirmation_id:chosen.id});
-    if(action.type!=='publish_settlement'&&choice.publish)return response(request,'need_input','这个单号不是发布审核单，未执行操作。');
+    const publishing=['publish_settlement','collection_finalize'].includes(action.type);
+    if(publishing&&!choice.publish)return response(request,'needs_confirmation',`发布须明确回复“确认发布 ${chosen.id}”；本次没有发布。`,{confirmation_id:chosen.id});
+    if(!publishing&&choice.publish)return response(request,'need_input','这个单号不是发布审核单，未执行操作。');
     if(actor.access_hash!==chosen.access_hash||chosen.source_hash!==sourceHash(action.team_id,action.month)){
       db.prepare("UPDATE agent_chat_confirmations SET status='stale' WHERE id=?").run(chosen.id);
       return response(request,'need_input','权限、绑定或原数据已变化，原确认作废。请重新发起预览。');
@@ -397,7 +429,10 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
       let result;
       const previous=JSON.parse(db.prepare('SELECT context_json FROM agent_chat_contexts WHERE context_key=?').get(key)?.context_json||'{}');
       const action=resolved?.action || parse(request,previous);
-      if(request.group_id) result=response(request,'need_input','为保护财务隐私，请私聊助理2继续查询或确认；本群不返回工资明细或执行写操作。');
+      if(request.group_id){
+        let collected;try{collected=getCollection()?.handleText(request);}catch(error){if(!(error instanceof HttpError))throw error;collected={status:'need_input',message:error.message};}
+        result=collected?response(request,collected.status,collected.message,{collection_id:collected.collection_id||'',at_wxids:collected.at_wxids||[]}):response(request,'need_input','个人财务查询请私聊助理2；收集工资可由主人在群里 @助理2 说明结算月份。');
+      }
       else if(['confirm','cancel'].includes(action.type))result=confirm(request,actor,key,action);
       else if(action.type==='reminders'){
         db.prepare('UPDATE agent_chat_bindings SET notifications_enabled=?,updated_at=? WHERE account_id=? AND from_user=?').run(action.enabled?1:0,stamp(),accountId,request.from_user);
@@ -454,7 +489,7 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
   function taskStatus(id,input) {
     const request=validateEnvelope(input,{query:true}),actor=actorFor(request);fresh(request);
     const task=db.prepare('SELECT * FROM agent_chat_tasks WHERE id=? AND context_key=? AND user_id=?').get(id,contextKey(request,actor),actor.id);
-    if(!task)throw new HttpError(404,'任务不存在或不属于当前会话');
+    if(!task){const image=getCollection()?.taskStatus(id,request);if(image)return image;throw new HttpError(404,'任务不存在或不属于当前会话');}
     const action=JSON.parse(task.action_json);assertAccess(actor,action.team_id,true);
     if(task.access_hash!==actor.access_hash)throw new HttpError(403,'任务访问权限已变化');
     return response(request,task.status,task.message,{task_id:id,detail_url:task.detail_url});
@@ -462,13 +497,15 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
   function notificationTarget(row,{receipt=false}={}){
     const actor=actorFor({account_id:accountId,from_user:row.from_user});assertAccess(actor,row.team_id,row.kind!=='settlement');
     if(actor.id!==row.user_id||actor.binding.revision!==row.binding_revision||!actor.binding.notifications_enabled)throw new HttpError(403,'接收权限或提醒开关已变化');
+    if(row.kind==='collection_notice')return getCollection().noticeTarget(row);
     if(!row.kind.startsWith('group_'))return {recipient_id:row.from_user,group_id:''};
     const policy=groupPolicy(row.team_id),match=row.source_key.match(/^group-(review|settlement):(\d+):([a-f0-9]{64}):([a-f0-9]{16}):(\d+)$/);
     const confirmation=match&&db.prepare('SELECT * FROM agent_chat_confirmations WHERE id=?').get(match[4]);
-    if(!policy||!match||match[1]!==row.kind.replace('group_','')||row.from_user!==ownerId||policy.revision!==Number(match[2])||sourceHash(row.team_id,row.month)!==match[3]||!confirmation||confirmation.user_id!==actor.id||confirmation.source_hash!==match[3])throw new HttpError(403,'结算或群推送设置已变化，请重新核对');
-    const action=JSON.parse(confirmation.action_json);
+    const action=confirmation&&JSON.parse(confirmation.action_json),ownFinalizedReceipt=receipt&&row.kind==='group_review'&&confirmation?.status==='confirmed'&&action?.type==='collection_finalize'&&action.review_source_hash===match?.[3];
+    if(!policy||!match||match[1]!==row.kind.replace('group_','')||row.from_user!==ownerId||policy.revision!==Number(match[2])||!ownFinalizedReceipt&&(sourceHash(row.team_id,row.month)!==match[3]||confirmation?.source_hash!==match[3])||!confirmation||confirmation.user_id!==actor.id)throw new HttpError(403,'结算或群推送设置已变化，请重新核对');
     if(action.target!=='z_group'||action.group_revision!==policy.revision||action.team_id!==row.team_id||action.month!==row.month||confirmation.access_hash!==actor.access_hash||
       !(row.kind==='group_review'?(receipt?['pending','confirmed']:['pending']).includes(confirmation.status):confirmation.status==='confirmed')||row.kind==='group_review'&&!receipt&&Date.parse(confirmation.expires_at)<=clock().getTime())throw new HttpError(403,'本次群推送尚未确认或审核已失效');
+    if(action.collection_id&&!receipt&&row.kind==='group_review'&&!getCollection().validateReply(action.collection_id))throw new HttpError(403,'工资收集已结束');
     return row.kind==='group_review'?{recipient_id:ownerId,group_id:'',confirmation_id:confirmation.id}:{recipient_id:Z_GROUP,group_id:Z_GROUP};
   }
   function pullNotifications({account_id,limit=10} = {}) {
@@ -511,11 +548,21 @@ function createAgentChatService({ db, backend, accountId, ownerId = 'ZML74121344
     const request=validateEnvelope(input,{query:true}),actor=actorFor(request);fresh(request);
     const row=db.prepare('SELECT access_hash,response_json FROM agent_chat_requests WHERE request_id=?').get(request.request_id);
     if(!row||row.access_hash!==hash([actor.access_hash,contextKey(request,actor)]))throw new HttpError(403,'回复权限或会话已变化');
-    return {allowed:true,response_hash:createHash('sha256').update(row.response_json).digest('hex')};
+    const saved=JSON.parse(row.response_json);if(request.group_id&&saved.collection_id&&!getCollection()?.validateReply(saved.collection_id))throw new HttpError(403,'工资收集状态已变化');
+    return {allowed:true,response_hash:createHash('sha256').update(row.response_json).digest('hex'),at_wxids:saved.at_wxids||[]};
+  }
+  function collectionImage(input){
+    const fields=new Set(['request_id','agent_id','account_id','from_user','conversation_id','group_id','text','received_at','collection_id','image_base64','mime_type','media_error']);
+    if(!input||Object.keys(input).some(k=>!fields.has(k)))throw new HttpError(400,'图片请求无效');
+    const {collection_id,image_base64,mime_type,media_error,...envelope}=input,request=validateEnvelope(envelope,{query:true});fresh(request);
+    if(request.group_id===Z_GROUP&&media_error)return getCollection().imageError({...request,collection_id});
+    if(request.group_id!==Z_GROUP||typeof image_base64!=='string'||image_base64.length>4*1024*1024||!/^[A-Za-z0-9+/]+={0,2}$/.test(image_base64))throw new HttpError(400,'请发送清晰的收入原图');
+    return getCollection().submitImage({...request,collection_id},Buffer.from(image_base64,'base64'));
   }
   return {chat,respond,taskStatus,bind,pullNotifications,notificationReceipt,authorizeNotification,enqueueNotification,authorizeResponse,
-    requestGroupReview,configureGroupPush,groupPushStatus,
-    ingressScope:()=>({account_id:accountId,owner_id:ownerId,group_id:'19116819870@chatroom',private_ids:db.prepare(`SELECT b.from_user FROM agent_chat_bindings b JOIN users u ON u.id=b.user_id
+    requestGroupReview,configureGroupPush,groupPushStatus,collectionAccess,collectionMembers,collectionPolicy:()=>groupPolicy(),requestCollectionReview,collectionImage,
+    collectionStatus:()=>getCollection()?.status()||null,
+    ingressScope:()=>({account_id:accountId,owner_id:ownerId,group_id:'19116819870@chatroom',collection:getCollection()?.scope()||null,private_ids:db.prepare(`SELECT b.from_user FROM agent_chat_bindings b JOIN users u ON u.id=b.user_id
       WHERE b.account_id=? AND b.enabled=1 AND u.status=1`).all(accountId).map(r=>r.from_user)}),
     bindings:adminId=>{const admin=db.prepare('SELECT role,status FROM users WHERE id=?').get(Number(adminId));
       if(admin?.role!=='admin'||admin.status!==1)throw new HttpError(403,'仅有效管理员可查看身份绑定');

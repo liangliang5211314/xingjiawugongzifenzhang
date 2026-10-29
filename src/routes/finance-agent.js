@@ -21,18 +21,7 @@ function bridgeAuth(req, res, next) {
     next();
   } catch (error) { next(error); }
 }
-async function recognize(buffer, mime) {
-  const config = privateConfig();
-  if (!config.bridge_token || config.recognize_url !== 'https://zf.xingjiawu.cn/api/finance-agent/recognize') throw new HttpError(503, '尚未连接现有 DeepSeek 识图服务');
-  const response = await fetch(config.recognize_url, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Finance-Token': config.bridge_token },
-    body: JSON.stringify({ image_base64: buffer.toString('base64'), mime_type: mime }), signal: AbortSignal.timeout(70000), redirect: 'error',
-  });
-  if (!response.ok) throw new HttpError(503, 'DeepSeek 识图服务暂时不可用，请稍后重试');
-  const body = await response.json();
-  if (!body.ok || !body.extraction) throw new HttpError(503, '未取得有效识图结果');
-  return body.extraction;
-}
+const {recognize}=require('../services/finance-vision');
 const service = createFinanceAgent({ db, recognize,
   previewSettlement: (teamId, month) => {
     const team = require('../models/team-model').getTeamById(teamId);
@@ -58,6 +47,7 @@ router.get('/chat-bindings', ...admin, sync(req => ({account_id:chatRuntime.sett
 router.post('/chat-bindings', ...admin, sync(req => chatRuntime.service.bind(req.body,req.user.id)));
 router.get('/group-push',...admin,sync(()=>chatRuntime.service.groupPushStatus()));
 router.post('/group-push',...admin,sync(req=>chatRuntime.service.configureGroupPush(req.body,req.user.id)));
+router.get('/collection-status',...admin,sync(()=>chatRuntime.service.collectionStatus()));
 
 router.post('/bridge/exchange', bridgeAuth, sync(req => service.exchange(req.body)));
 router.get('/status', ...admin, sync(() => ({ scope: service.getScope() || null, bindings: service.bindings(), submissions: service.list(), reviews:service.reviews(),

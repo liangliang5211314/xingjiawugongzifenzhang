@@ -20,6 +20,29 @@ function imageType(buffer) {
   throw new HttpError(400, '仅支持 JPEG、PNG、WebP 原图');
 }
 
+function normalize(extraction) {
+  if (!extraction || !Array.isArray(extraction.transactions) || extraction.transactions.length > 80) throw new HttpError(400, '图片识别结果不完整，请重传清晰原图');
+  const transactions = extraction.transactions.map(t => {
+    if (!/^20\d{2}-\d{2}-\d{2}$/.test(t.date) || Number.isNaN(Date.parse(t.date)) || new Date(t.date).toISOString().slice(0, 10) !== t.date) throw new HttpError(400, '交易日期无法辨认，请人工核对');
+    if (!['income', 'expense', 'refund'].includes(t.type)) throw new HttpError(400, '存在无法判断的收支类型，请人工核对');
+    return { date:t.date,amount:(cents(t.amount)/100).toFixed(2),type:t.type,description:clean(t.description,200),
+      ...(t.transaction_id?{transaction_id:clean(t.transaction_id,100)}:{}),...(t.time?{time:clean(t.time,20)}:{}) };
+  });
+  if (!transactions.length) throw new HttpError(400, '未识别到交易明细，请补充原图或人工录入');
+  const monthly_totals = Array.isArray(extraction.monthly_totals) ? extraction.monthly_totals.filter(t => MONTH.test(t.month))
+    .map(t => ({ month:t.month,amount:(cents(t.amount)/100).toFixed(2) })) : [];
+  return { transactions,monthly_totals };
+}
+function select(row, sourceMonth) {
+  const extraction=JSON.parse(row.extraction_json||'null');if(!extraction)throw new HttpError(409,'识图尚未完成或需要重试');
+  const entries=extraction.transactions.filter(t=>t.date.startsWith(sourceMonth));
+  if(!entries.length)throw new HttpError(400,'图片中没有这个月份的交易');
+  if(entries.some(t=>t.type==='refund'))throw new HttpError(409,'这个月份含退款，请管理员先确认退款的财务归类');
+  if(new Set(entries.map(t=>t.type)).size!==1)throw new HttpError(409,'同一图片月份包含收入和支出，请拆分后核对');
+  const amount=entries.reduce((sum,t)=>sum+cents(t.amount),0),total=extraction.monthly_totals.find(t=>t.month===sourceMonth);
+  if(total&&cents(total.amount)!==amount)throw new HttpError(409,'逐笔金额与图片月度汇总不一致，请提供完整图片');
+  return {entries,amount,type:entries[0].type};
+}
 function createFinanceAgent({ db, recognize, previewSettlement, publishSettlement, clock = () => new Date(), onError = () => {} }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS finance_scope (
@@ -106,30 +129,6 @@ function createFinanceAgent({ db, recognize, previewSettlement, publishSettlemen
   }
   function audit(row, action, actor) {
     return JSON.stringify([...JSON.parse(row.audit_json || '[]'), { action, actor, at: stamp() }].slice(-50));
-  }
-  function normalize(extraction) {
-    if (!extraction || !Array.isArray(extraction.transactions) || extraction.transactions.length > 80) throw new HttpError(400, '图片识别结果不完整，请重传清晰原图');
-    const transactions = extraction.transactions.map(t => {
-      if (!/^20\d{2}-\d{2}-\d{2}$/.test(t.date) || Number.isNaN(Date.parse(t.date)) || new Date(t.date).toISOString().slice(0, 10) !== t.date) throw new HttpError(400, '交易日期无法辨认，请人工核对');
-      if (!['income', 'expense', 'refund'].includes(t.type)) throw new HttpError(400, '存在无法判断的收支类型，请人工核对');
-      return { date: t.date, amount: (cents(t.amount) / 100).toFixed(2), type: t.type, description: clean(t.description, 200) };
-    });
-    if (!transactions.length) throw new HttpError(400, '未识别到交易明细，请补充原图或人工录入');
-    const monthly_totals = Array.isArray(extraction.monthly_totals) ? extraction.monthly_totals.filter(t => MONTH.test(t.month))
-      .map(t => ({ month: t.month, amount: (cents(t.amount) / 100).toFixed(2) })) : [];
-    return { transactions, monthly_totals };
-  }
-  function select(row, sourceMonth) {
-    const extraction = JSON.parse(row.extraction_json || 'null');
-    if (!extraction) throw new HttpError(409, '识图尚未完成或需要重试');
-    const entries = extraction.transactions.filter(t => t.date.startsWith(sourceMonth));
-    if (!entries.length) throw new HttpError(400, '图片中没有这个月份的交易');
-    if (entries.some(t => t.type === 'refund')) throw new HttpError(409, '这个月份含退款，请管理员先确认退款的财务归类');
-    if (new Set(entries.map(t => t.type)).size !== 1) throw new HttpError(409, '同一图片月份包含收入和支出，请拆分后核对');
-    const amount = entries.reduce((sum, t) => sum + cents(t.amount), 0);
-    const total = extraction.monthly_totals.find(t => t.month === sourceMonth);
-    if (total && cents(total.amount) !== amount) throw new HttpError(409, '逐笔金额与图片月度汇总不一致，请提供完整图片');
-    return { entries, amount, type: entries[0].type };
   }
   const processing = new Set();
   async function process(id) {
@@ -431,4 +430,4 @@ function createFinanceAgent({ db, recognize, previewSettlement, publishSettlemen
     resume: () => db.prepare("SELECT id FROM finance_submissions WHERE status='processing'").all().forEach(r => setImmediate(() => process(r.id).catch(onError))),
     bindings: () => db.prepare('SELECT b.*,u.name AS member_name FROM finance_bindings b JOIN users u ON u.id=b.user_id ORDER BY b.updated_at DESC').all() };
 }
-module.exports = { createFinanceAgent, imageType, cents, GROUP_ID };
+module.exports = { createFinanceAgent, imageType, cents, GROUP_ID,normalizeReceipt:normalize,selectReceipt:select };

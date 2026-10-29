@@ -10,6 +10,7 @@ const body = `
 <button class="btn btn-primary" onclick="saveChatBinding()">保存统一入口身份</button><div id="chatBindings"></div></div>
 <div class="card"><h3>助理2 · Z团队群推送</h3><p>发送到“Z团队性价屋对接群”。每次保存 Z团队结算后，先私聊主人核对；主人回复审核单中的“确认发布”后，由助理2自动发到群。重复点击不会重复提交同一份结算。</p>
 <label><input type="checkbox" id="groupPushEnabled"> 开启结算后私聊审核并自动发群</label>　<button class="btn btn-primary" onclick="saveGroupPush()">保存群推送设置</button><p id="groupPushStatus"></p></div>
+<div class="card"><h3>群内收集工资截图</h3><p>主人在 Z群真正 @助理2，说明“结算十月工资”等月份。助理2会 @已绑定的上报成员收截图，成员发齐后回复“报齐”；识别结果先暂存，你确认预览后才保存收入和结算并发群。收集期间的指定成员可以直接发图，其他闲聊仍不触发。</p><p id="collectionStatus">暂无正在进行的收集</p></div>
 <div class="card"><h3>旧版 Z 团队收图入口（切换前保留）</h3><p>下面为原有独立收图流程。统一分流切换前须由微信入口项目关闭重复分派；本页面不会创建新的微信连接。</p>
 <p>仅接收：Z团队性价屋对接群 · 19116819870@chatroom。月度统计先私发主人 ZML741213442，审核后发布。</p>
 <div class="form-grid"><div class="form-row"><label for="financeTeam">财务团队</label><select id="financeTeam"></select></div>
@@ -41,6 +42,9 @@ async function loadFinance() {
   await loadChatBindings();
   const group=await api('/api/finance-agent/group-push');
   if(group&&group.ok){document.getElementById('groupPushEnabled').checked=group.data.enabled;document.getElementById('groupPushStatus').textContent=group.data.enabled?'已开启：先私聊主人核对，确认后发到 Z团队群。':'已关闭：结算不会自动发群。';}
+  const collection=await api('/api/finance-agent/collection-status');
+  if(collection&&collection.ok&&collection.data){const c=collection.data;document.getElementById('collectionStatus').textContent=(c.month||'待选月份')+' · '+({awaiting_month:'等待月份或成员绑定',collecting:'收集中',awaiting_owner:'等待你确认'}[c.status]||c.status)+'；'+c.members.map(m=>m.name+' '+(m.done?'已报齐':'待上报')).join('，');}
+  else document.getElementById('collectionStatus').textContent='暂无正在进行的收集';
   const result = await api('/api/finance-agent/status');
   if (!result || !result.ok) return;
   financeState = result.data;

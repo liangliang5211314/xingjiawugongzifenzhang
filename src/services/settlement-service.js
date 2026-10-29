@@ -77,9 +77,9 @@ function previewSettlement(teamId, month) {
 
 let settlementSaved;
 function setSettlementSavedHandler(handler){settlementSaved=handler;}
-function runSettlement(teamId, month) {
+function runSettlement(teamId, month,{notify=true}={}) {
   const saved=saveSettlement(teamId, month, buildSettlementData(teamId, month));
-  try{settlementSaved?.(saved);}catch(error){console.error('[settlement-review]',error.name);}
+  try{if(notify)settlementSaved?.(saved);}catch(error){console.error('[settlement-review]',error.name);}
   return saved;
 }
 
