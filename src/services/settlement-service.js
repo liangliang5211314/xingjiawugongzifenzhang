@@ -75,8 +75,12 @@ function previewSettlement(teamId, month) {
   return { team_id: teamId, month, ...totals, result_json: result };
 }
 
+let settlementSaved;
+function setSettlementSavedHandler(handler){settlementSaved=handler;}
 function runSettlement(teamId, month) {
-  return saveSettlement(teamId, month, buildSettlementData(teamId, month));
+  const saved=saveSettlement(teamId, month, buildSettlementData(teamId, month));
+  try{settlementSaved?.(saved);}catch(error){console.error('[settlement-review]',error.name);}
+  return saved;
 }
 
 function fetchSettlement(teamId, month) {
@@ -99,4 +103,4 @@ function markSettlementPushed(id) {
   return markPushed(id);
 }
 
-module.exports = { runSettlement, previewSettlement, fetchSettlement, fetchSettlementById, getSettlements, markSettlementPushed };
+module.exports = { runSettlement, previewSettlement, fetchSettlement, fetchSettlementById, getSettlements, markSettlementPushed,setSettlementSavedHandler };

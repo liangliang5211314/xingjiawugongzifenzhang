@@ -34,6 +34,12 @@ async function pushSettlementController(req, res, next) {
     const settlement = fetchSettlementById(Number(req.params.id));
     if (!settlement) throw new HttpError(404, '结算记录不存在');
     assertCanManageTeam(req.user, settlement.team_id);
+    const team=getTeamById(settlement.team_id);
+    if(team?.name==='性价屋Z团队'){
+      const result=require('../services/agent-chat-runtime').service.requestGroupReview(settlement,{user_id:req.user.id});
+      if(['disabled','muted'].includes(result.status))throw new HttpError(400,result.message);
+      return res.json({ok:true,data:{channel:'assistant2_group',...result}});
+    }
     const result = await pushSettlement(settlement);
     res.json({ ok: true, data: result });
   } catch (e) { next(e); }

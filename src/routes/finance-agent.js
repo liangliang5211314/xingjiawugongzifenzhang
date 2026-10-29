@@ -56,6 +56,8 @@ const chatRuntime = require('../services/agent-chat-runtime');
 router.get('/chat-bindings', ...admin, sync(req => ({account_id:chatRuntime.settings().accountId,
   bindings:chatRuntime.service.bindings(req.user.id),users:db.prepare('SELECT id,name,role FROM users WHERE status=1 ORDER BY id').all()})));
 router.post('/chat-bindings', ...admin, sync(req => chatRuntime.service.bind(req.body,req.user.id)));
+router.get('/group-push',...admin,sync(()=>chatRuntime.service.groupPushStatus()));
+router.post('/group-push',...admin,sync(req=>chatRuntime.service.configureGroupPush(req.body,req.user.id)));
 
 router.post('/bridge/exchange', bridgeAuth, sync(req => service.exchange(req.body)));
 router.get('/status', ...admin, sync(() => ({ scope: service.getScope() || null, bindings: service.bindings(), submissions: service.list(), reviews:service.reviews(),

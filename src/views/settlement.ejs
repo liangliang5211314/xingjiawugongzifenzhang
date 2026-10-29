@@ -203,6 +203,7 @@ function showSettleResult(s) {
   document.getElementById('settleResult').style.display = 'block';
   document.getElementById('settleErr').style.display = 'none';
   document.getElementById('btnPush').dataset.id = s.id;
+  document.getElementById('btnPush').textContent=teamsMap[s.team_id]==='性价屋Z团队'?'📨 助理2发群（先核对）':'📨 推送微信';
   document.getElementById('btnWecom').dataset.id = s.id;
   document.getElementById('btnFeishu').dataset.team = s.team_id;
   document.getElementById('btnFeishu').dataset.month = s.month;
@@ -408,10 +409,12 @@ async function wecomPush() {
 async function pushSettle() {
   const id = document.getElementById('btnPush').dataset.id;
   if (!id) return alert('请先运行结算');
-  if (!confirm('确认推送微信通知给所有成员？')) return;
+  const isZ=String(document.getElementById('settleTitle').textContent).includes('性价屋Z团队');
+  if (!isZ&&!confirm('确认推送微信通知给所有成员？')) return;
   const res = await api('/api/settlements/'+id+'/push', { method:'POST' });
   if (res && res.ok) {
     const d = res.data;
+    if(d.channel==='assistant2_group'){alert(d.message);return;}
     alert('推送完成：成功'+d.pushed+'人，失败'+d.failed+'人，跳过'+d.skipped+'人');
     loadSettlements();
   }

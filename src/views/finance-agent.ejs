@@ -8,6 +8,8 @@ const body = `
 <p id="chatAccountStatus"></p><div class="form-grid"><div class="form-row"><label for="chatSender">真实微信发送者 ID</label><input id="chatSender"></div><div class="form-row"><label for="chatUser">本项目真实账号</label><select id="chatUser"></select></div></div>
 <label><input type="checkbox" id="chatBindingEnabled" checked> 启用身份绑定</label>　<label><input type="checkbox" id="chatNotifications"> 开启本人私聊财务提醒</label>
 <button class="btn btn-primary" onclick="saveChatBinding()">保存统一入口身份</button><div id="chatBindings"></div></div>
+<div class="card"><h3>助理2 · Z团队群推送</h3><p>发送到“Z团队性价屋对接群”。每次保存 Z团队结算后，先私聊主人核对；主人回复审核单中的“确认发布”后，由助理2自动发到群。重复点击不会重复提交同一份结算。</p>
+<label><input type="checkbox" id="groupPushEnabled"> 开启结算后私聊审核并自动发群</label>　<button class="btn btn-primary" onclick="saveGroupPush()">保存群推送设置</button><p id="groupPushStatus"></p></div>
 <div class="card"><h3>旧版 Z 团队收图入口（切换前保留）</h3><p>下面为原有独立收图流程。统一分流切换前须由微信入口项目关闭重复分派；本页面不会创建新的微信连接。</p>
 <p>仅接收：Z团队性价屋对接群 · 19116819870@chatroom。月度统计先私发主人 ZML741213442，审核后发布。</p>
 <div class="form-grid"><div class="form-row"><label for="financeTeam">财务团队</label><select id="financeTeam"></select></div>
@@ -24,7 +26,7 @@ const body = `
 <div class="form-grid"><div class="form-row"><label for="financeUploadMember">归属成员</label><select id="financeUploadMember"></select></div>
 <div class="form-row"><label for="financeImage">原图（JPEG / PNG / WebP，最多 3MB）</label><input id="financeImage" type="file" accept="image/jpeg,image/png,image/webp"></div></div>
 <button id="financeUploadBtn" class="btn btn-primary" onclick="uploadFinanceImage()">识别并生成核对单</button></div>
-<div class="card"><h3>月度统计 · 先给主人审核</h3><p>生成统计只私发给主人；主人回复审核单号确认后才保存结算并发到群。</p>
+<div class="card"><h3>旧版收图统计（保留）</h3><p>此处用于原有收图核对。通过助理2发到 Z团队群，请到“结算”页面运行结算，或点击“助理2发群（先核对）”。</p>
 <div class="form-row"><label for="financeReviewMonth">结算月份</label><input type="month" id="financeReviewMonth"></div>
 <label><input type="checkbox" id="financeComplete"> 我已人工核对本月成员全部报齐，待核对凭证均已处理</label>
 <button class="btn btn-primary" onclick="requestFinanceReview()">生成并私发主人审核单</button><div id="financeReviews" style="margin-top:12px"></div></div>
@@ -37,6 +39,8 @@ const financeStatuses = {processing:'识图中',unbound:'待绑定成员',recogn
 function financeEscape(value) { return String(value == null ? '' : value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 async function loadFinance() {
   await loadChatBindings();
+  const group=await api('/api/finance-agent/group-push');
+  if(group&&group.ok){document.getElementById('groupPushEnabled').checked=group.data.enabled;document.getElementById('groupPushStatus').textContent=group.data.enabled?'已开启：先私聊主人核对，确认后发到 Z团队群。':'已关闭：结算不会自动发群。';}
   const result = await api('/api/finance-agent/status');
   if (!result || !result.ok) return;
   financeState = result.data;
@@ -53,6 +57,10 @@ async function loadFinance() {
   document.getElementById('financeBindings').innerHTML=(financeState.bindings || []).map(b=>'<div>'+financeEscape(b.member_name)+' ← '+financeEscape(b.sender_id)+'</div>').join('') || '尚未绑定；成员发图后可从下面凭证复制发送者 ID。';
   renderFinanceSubmissions();
   document.getElementById('financeReviews').innerHTML=(financeState.reviews || []).map(r=>'<div>'+financeEscape(r.month)+' · '+financeEscape({awaiting_owner:'待主人审核',approved:'主人已通过',rejected:'主人已拒绝',stale:'数据有变，需重新审核'}[r.status] || r.status)+' · '+r.id+'</div>').join('');
+}
+async function saveGroupPush(){
+  const result=await api('/api/finance-agent/group-push',{method:'POST',body:JSON.stringify({enabled:document.getElementById('groupPushEnabled').checked})});
+  if(result&&result.ok){await loadFinance();alert('群推送设置已保存');}else alert(result&&result.message||'保存失败，请由主人本人操作');
 }
 async function loadChatBindings(){
   const result=await api('/api/finance-agent/chat-bindings');if(!result || !result.ok)return;

@@ -22,6 +22,7 @@ const service = createAgentChatService({db,accountId:settings().accountId,ownerI
     const result=await response.json();if(!result.ok)throw new Error('Finance understanding unavailable');return result.plan;
   },
   backend:{addRecord:records.addRecord,editRecord:records.editRecord,previewSettlement:settlements.previewSettlement,
-    runSettlement:settlements.runSettlement,fetchSettlement:getSettlement},onError:error=>console.error('[finance-chat]',error.name)});
+    runSettlement:settlements.runSettlement,fetchSettlement:getSettlement,markSettlementPushed:settlements.markSettlementPushed},onError:error=>console.error('[finance-chat]',error.name)});
 service.recover();
+settlements.setSettlementSavedHandler(saved=>service.requestGroupReview(saved));
 module.exports={service,settings};

@@ -83,6 +83,16 @@ HTTP：200 为正常业务分支（包括权限不足的简明 failed）；400 �
 
 ## 主动提醒交接
 
+### Z团队经主人核对后由助理2发群
+
+2026-10-29 用户明确指定通过现有助理2发到“Z团队性价屋对接群” `19116819870@chatroom`，沿用先私聊主人核对的顺序。这是固定 Z团队结算报告的显式群发布范围；其他团队和个人查询仍按原权限及私聊规则处理。
+
+`GET/POST /api/finance-agent/group-push` 提供开关，POST 只接受 `{enabled:boolean}`，仅已有主人绑定账号且有 Z团队管理权限的用户可设置。不接受自定义群号或接收人。开启后每次保存 Z团队结算，由原结算服务的保存回调生成主人私聊审核单；网页原“推送微信”对 Z团队也只发起同一审核流程，不再调用公众号模板服务。其他团队的公众号推送不变。
+
+主人私聊回复“确认发布 单号”后，任务把该版本完整报告分段提交现有统一发送队列，支出项目、垫付人及备注均保留。审核确认与原始数据、绑定和群设置版本关联；变化后不发布。相同内容不重复提交；不明发送结果不自动重试。群推送 `kind=group_settlement`，`group_id=recipient_id=19116819870@chatroom`；核对单 `kind=group_review` 仍仅主人私聊，附 confirmation_id 供入口关联待确认事项。
+
+发送前 `/notifications/:id/authorize` 同时返回 recipient_id、group_id 和 message_hash。群发送必须核对固定目标及完整消息摘要，不能借通知接口转发到其他群。主人关闭提醒或关闭群推送会阻止尚未发出的内容；全部分段得到 accepted 后才标记结算已推送，accepted 仍不等于用户实际看到。群设置、审核和交付只写财务 Agent 的表，不改变原账本和分账公式，不创建新微信连接，不修改 NAS CLOUD_BASE。
+
 提醒使用 `【性价屋·财务】` 前缀，包含团队、月份、问题及真实详情链接。绑定中的 notifications_enabled 和用户聊天“开启提醒/关闭提醒”控制是否交付。财务模块提供 enqueueNotification 供明确的财务事件调用；本轮不新建定时器或扫描微信。
 
 `POST /api/internal/agent/notifications/pull`，服务凭据认证，body `{account_id,limit}`；返回仅具当前财务权限的私聊接收人及最少发送内容。每条包含 notification_id、稳定 delivery_id、agent_id=finance、account_id、recipient_id、group_id=""、message、detail_url、expires_at（2分钟）。统一入口必须用 delivery_id 去重并通过现有发送队列发送。

@@ -30,7 +30,7 @@ function count(table){return db.prepare(`SELECT count(*) n FROM ${table}`).get()
 function runJobs(){while(jobs.length)jobs.shift()();}
 function bind(sender,user,enabled=true,notifications=true,previous){return service.bind({account_id:ACCOUNT,from_user:sender,user_id:user,enabled,notifications_enabled:notifications,previous_user_id:previous},1);}
 beforeEach(()=>{
-  for(const table of ['agent_chat_notifications','agent_chat_tasks','agent_chat_confirmations','agent_chat_requests','agent_chat_contexts','agent_chat_bindings',
+  for(const table of ['agent_chat_notifications','agent_chat_tasks','agent_chat_confirmations','agent_chat_requests','agent_chat_contexts','agent_chat_bindings','agent_chat_group_push',
     'income_records','settlements','team_rule_members','user_teams','users','teams']){
     if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table))db.exec(`DELETE FROM ${table}`);
   }
@@ -48,7 +48,7 @@ beforeEach(()=>{
   settlement.runSettlement(1,'2026-10');
   jobs=[];now=new Date('2026-10-28T08:00:00Z');serial=0;runCount=0;
   service=createAgentChatService({db,accountId:ACCOUNT,ownerId:OWNER,baseUrl:'https://finance.example.invalid',clock:()=>now,schedule:fn=>jobs.push(fn),
-    backend:{addRecord:recordService.addRecord,editRecord:recordService.editRecord,fetchSettlement:getSettlement,
+    backend:{addRecord:recordService.addRecord,editRecord:recordService.editRecord,fetchSettlement:getSettlement,markSettlementPushed:settlement.markSettlementPushed,
       previewSettlement:settlement.previewSettlement,runSettlement:(...args)=>{runCount++;return settlement.runSettlement(...args);}}});
   bind(OWNER,1);bind('wxid-leader',2);bind('wxid-r',3);bind('wxid-h',4);bind('wxid-other',6);
 });
@@ -56,6 +56,58 @@ after(()=>db.close());
 
 function withUnderstanding(interpret){return createAgentChatService({db,accountId:ACCOUNT,ownerId:OWNER,clock:()=>now,interpret,
   backend:{addRecord:recordService.addRecord,editRecord:recordService.editRecord,fetchSettlement:getSettlement,previewSettlement:settlement.previewSettlement,runSettlement:settlement.runSettlement}});}
+
+function ownerWechat(text){return request(text,{conversation_id:'wechat:'+require('crypto').createHash('sha256').update(JSON.stringify([ACCOUNT,'',OWNER])).digest('hex').slice(0,40)});}
+function groupReview(){service.configureGroupPush({enabled:true},1);return service.requestGroupReview(getSettlement(1,'2026-10'));}
+test('saving Z settlement automatically requests one private review without sending to a group',t=>{
+  service.configureGroupPush({enabled:true},1);settlement.setSettlementSavedHandler(saved=>service.requestGroupReview(saved));t.after(()=>settlement.setSettlementSavedHandler(undefined));
+  settlement.runSettlement(1,'2026-10');const before=count('agent_chat_notifications');assert.ok(before>0);
+  settlement.runSettlement(1,'2026-10');assert.equal(count('agent_chat_notifications'),before);
+  assert.equal(db.prepare("SELECT count(*) n FROM agent_chat_notifications WHERE kind='group_settlement'").get().n,0);
+  assert.ok(service.pullNotifications({account_id:ACCOUNT}).items.every(n=>n.recipient_id===OWNER&&!n.group_id));
+});
+test('Z group publication first sends a complete private review and waits for the real owner confirmation',()=>{
+  const review=groupReview();assert.equal(review.status,'awaiting_owner');
+  const repeat=service.requestGroupReview(getSettlement(1,'2026-10'));assert.equal(repeat.confirmation_id,review.confirmation_id);
+  const privateItems=service.pullNotifications({account_id:ACCOUNT}).items;assert.ok(privateItems.length);assert.ok(privateItems.every(n=>n.recipient_id===OWNER&&n.group_id===''));
+  const report=privateItems.map(n=>n.message).join('');assert.match(report,/软件：¥1080\.00/);assert.match(report,/支出人：崔海亮/);assert.match(report,/净分成 ¥2535\.37/);assert.match(report,new RegExp('确认发布 '+review.confirmation_id));
+  for(const n of privateItems)service.notificationReceipt(n.notification_id,{account_id:ACCOUNT,delivery_id:n.delivery_id,state:'accepted'});
+  assert.equal(service.chat(ownerWechat('确认 '+review.confirmation_id)).status,'needs_confirmation');assert.equal(count('agent_chat_tasks'),0);
+  assert.equal(service.chat(request('确认发布 '+review.confirmation_id)).status,'need_input');
+  const task=service.chat(ownerWechat('确认发布 '+review.confirmation_id));assert.equal(task.status,'running');runJobs();
+  const status=service.taskStatus(task.task_id,ownerWechat(''));assert.equal(status.status,'answered');assert.match(status.message,/Z团队性价屋对接群/);
+  const group=service.pullNotifications({account_id:ACCOUNT}).items;assert.ok(group.length);assert.ok(group.every(n=>n.group_id==='19116819870@chatroom'&&n.recipient_id===n.group_id&&n.message.length<1800));
+  for(const n of group){const authorized=service.authorizeNotification(n.notification_id,{account_id:ACCOUNT,delivery_id:n.delivery_id});assert.equal(authorized.recipient_id,n.group_id);assert.equal(authorized.message_hash,require('crypto').createHash('sha256').update(n.message).digest('hex'));
+    service.notificationReceipt(n.notification_id,{account_id:ACCOUNT,delivery_id:n.delivery_id,state:'accepted'});}
+  assert.ok(getSettlement(1,'2026-10').pushed_at);
+  assert.equal(service.requestGroupReview(getSettlement(1,'2026-10')).status,'already_submitted');assert.equal(service.pullNotifications({account_id:ACCOUNT}).items.length,0);
+});
+test('group send requires the owner team permission and cannot switch to another group',()=>{
+  assert.throws(()=>service.configureGroupPush({enabled:true},2),/主人本人/);
+  assert.throws(()=>service.configureGroupPush({enabled:true,group_id:'other@chatroom'},1),/是否开启/);
+  const review=groupReview();assert.equal(service.chat({...ownerWechat('确认发布 '+review.confirmation_id),from_user:'wxid-leader'}).status,'need_input');
+  db.prepare("UPDATE income_records SET note='updated after review' WHERE item_type='expense'").run();
+  assert.equal(service.chat(ownerWechat('确认发布 '+review.confirmation_id)).status,'need_input');assert.equal(count('agent_chat_tasks'),0);
+});
+test('disabling group push or revoking permission blocks even an approved queued report',()=>{
+  const review=groupReview();service.chat(ownerWechat('确认发布 '+review.confirmation_id));runJobs();
+  const items=service.pullNotifications({account_id:ACCOUNT}).items;assert.ok(items.length);const n=items.find(n=>n.group_id);assert.ok(n);
+  service.configureGroupPush({enabled:false},1);assert.throws(()=>service.authorizeNotification(n.notification_id,{account_id:ACCOUNT,delivery_id:n.delivery_id}),/设置已变化/);
+  assert.equal(service.pullNotifications({account_id:ACCOUNT}).items.length,0);
+});
+test('turning off reminders between confirmation and execution prevents a group task from reporting a false success',()=>{
+  const review=groupReview(),task=service.chat(ownerWechat('确认发布 '+review.confirmation_id));service.chat(ownerWechat('关闭提醒'));runJobs();
+  assert.equal(service.taskStatus(task.task_id,ownerWechat('')).status,'failed');
+  assert.equal(db.prepare("SELECT count(*) n FROM agent_chat_notifications WHERE kind='group_settlement'").get().n,0);
+});
+test('long expense notes are preserved across bounded parts and uncertain group sends never auto retry',()=>{
+  for(let i=0;i<15;i++)db.prepare("INSERT INTO income_records(team_id,month,person_name,item_type,item_name,amount,payer_name,note) VALUES(1,'2026-10','崔海亮','expense',?,100,'崔海亮',?)").run('长备注'+i,'保留'+i+' '+('备注内容'.repeat(80)));
+  settlement.runSettlement(1,'2026-10');const review=groupReview();
+  service.chat(ownerWechat('确认发布 '+review.confirmation_id));runJobs();const group=service.pullNotifications({account_id:ACCOUNT,limit:20}).items.filter(n=>n.group_id);
+  assert.ok(group.length>3);const all=group.map(n=>n.message).join('');for(let i=0;i<15;i++)assert.ok(all.includes('长备注'+i));assert.ok(all.includes('备注内容'.repeat(40)));
+  for(const n of group)service.notificationReceipt(n.notification_id,{account_id:ACCOUNT,delivery_id:n.delivery_id,state:'uncertain'});
+  assert.equal(service.pullNotifications({account_id:ACCOUNT}).items.length,0);assert.equal(service.requestGroupReview(getSettlement(1,'2026-10')).status,'already_submitted');
+});
 
 test('ordinary month names and lowercase team aliases need no prescribed format',()=>{
   assert.match(service.chat(request('z组今年十月收入多少')).message,/2026-10\n收入 ¥11517\.63/);
@@ -374,6 +426,12 @@ test('the actual app mounts the contract, administrator-only binding API and rea
     const page=await fetch(origin+path);assert.equal(page.status,200);const html=await page.text();for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new Function(script[1]);
     if(path==='/admin/finance-agent')assert.match(html,/统一微信入口/);
   }
+  const groupConfig=await fetch(origin+'/api/finance-agent/group-push',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${adminToken}`},body:JSON.stringify({enabled:true})});
+  assert.equal(groupConfig.status,200);assert.equal((await groupConfig.json()).data.group_id,'19116819870@chatroom');
+  const row=getSettlement(1,'2026-10');const groupReview=await fetch(origin+'/api/settlements/'+row.id+'/push',{method:'POST',headers:{Authorization:`Bearer ${adminToken}`}});
+  assert.equal(groupReview.status,200);const reviewData=(await groupReview.json()).data;assert.equal(reviewData.channel,'assistant2_group');assert.equal(reviewData.status,'awaiting_owner');
+  assert.equal(db.prepare("SELECT count(*) n FROM agent_chat_notifications WHERE kind='group_settlement'").get().n,0);
+  assert.ok(db.prepare("SELECT count(*) n FROM agent_chat_notifications WHERE kind='group_review'").get().n>0);
   db.prepare("UPDATE users SET role='member' WHERE id=1").run();
   const revoked=await fetch(origin+'/api/finance-agent/chat-bindings',{headers:{Authorization:`Bearer ${adminToken}`}});assert.equal(revoked.status,403);
 });
